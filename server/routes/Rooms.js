@@ -2,16 +2,39 @@ const express = require("express");
 const router = express.Router();
 const Sensor = require("../models/Sensor");
 const Room = require("../models/room");
+const Reading = require("../models/Reading");
 
 // GET /api/rooms
 router.get("/", async (req, res) => {
-  try {
-    const rooms = await Room.find().populate("sensorId", "name devEui webhookSlug");
-    res.json(rooms);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+    try {
+      const rooms = await Room.find().populate("sensorId", "name devEui webhookSlug lastSeenAt");
+  
+      const roomsWithOccupancy = await Promise.all(
+        rooms.map(async (room) => {
+          let currentOccupancy = 0;
+  
+          if (room.sensorId) {
+            const lastReading = await Reading.findOne({ sensorId: room.sensorId._id })
+              .sort({ timestamp: -1 })
+              .select("occupancy timestamp");
+            currentOccupancy = lastReading?.occupancy ?? 0;
+          }
+  
+          return {
+            ...room.toObject(),
+            currentOccupancy,
+            occupancyPercent: room.capacity > 0
+              ? Math.min(100, Math.round((currentOccupancy / room.capacity) * 100))
+              : 0,
+          };
+        })
+      );
+  
+      res.json(roomsWithOccupancy);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 
 // POST /api/rooms
 router.post("/", async (req, res) => {
