@@ -6,6 +6,11 @@ const readingSchema = new mongoose.Schema({
     ref: "Sensor",
     required: true,
   },
+  roomId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Room",
+    default: null,
+  },
   timestamp: {
     type: Date,
     default: Date.now,
@@ -18,5 +23,6 @@ const readingSchema = new mongoose.Schema({
 });
 
 readingSchema.index({ sensorId: 1, timestamp: -1 });
+readingSchema.index({ roomId: 1, timestamp: -1 });
 
 module.exports = mongoose.model("Reading", readingSchema);

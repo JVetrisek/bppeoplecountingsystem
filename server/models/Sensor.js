@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-const { nanoid } = require("nanoid");
 
 const sensorSchema = new mongoose.Schema(
   {
@@ -14,11 +13,6 @@ const sensorSchema = new mongoose.Schema(
       unique: true,
       uppercase: true,
       trim: true,
-    },
-    webhookSlug: {
-      type: String,
-      unique: true,
-      default: () => nanoid(12),
     },
     roomId: {
       type: mongoose.Schema.Types.ObjectId,
