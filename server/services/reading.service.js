@@ -36,10 +36,6 @@ function formatReading(reading) {
   };
 }
 
-function formatReadings(readings) {
-  return readings.map(formatReading);
-}
-
 function buildReadingFilter({ sensorId, roomId, from, to }) {
   const filter = {};
   if (sensorId) filter.sensorId = sensorId;
@@ -52,57 +48,17 @@ function buildReadingFilter({ sensorId, roomId, from, to }) {
   return filter;
 }
 
-function parsePagination(query) {
-  const limit = Math.min(parseInt(query.limit, 10) || 100, 1000);
-  const usePagination = query.page !== undefined || query.offset !== undefined;
-
-  if (!usePagination) {
-    return { limit, offset: 0, usePagination: false };
-  }
-
-  const page = Math.max(parseInt(query.page, 10) || 1, 1);
-  const offset =
-    query.offset !== undefined
-      ? Math.max(parseInt(query.offset, 10) || 0, 0)
-      : (page - 1) * limit;
-
-  return { limit, offset, page, usePagination: true };
-}
-
 async function fetchReadings(query) {
   const { sensorId, roomId, from, to } = query;
   const filter = buildReadingFilter({ sensorId, roomId, from, to });
-  const { limit, offset, page, usePagination } = parsePagination(query);
+  const limit = Math.min(parseInt(query.limit, 10) || 100, 1000);
 
   const readings = await Reading.find(filter)
     .sort({ timestamp: -1 })
-    .skip(offset)
     .limit(limit)
     .populate("sensorId", "name devEui");
 
-  if (!usePagination) {
-    return formatReadings(readings);
-  }
-
-  const total = await Reading.countDocuments(filter);
-  return {
-    data: formatReadings(readings),
-    pagination: {
-      page,
-      limit,
-      offset,
-      total,
-      totalPages: Math.ceil(total / limit),
-    },
-  };
-}
-
-async function fetchLatestReading(sensorId) {
-  const filter = sensorId ? { sensorId } : {};
-  const reading = await Reading.findOne(filter)
-    .sort({ timestamp: -1 })
-    .populate("sensorId", "name devEui");
-  return reading ? formatReading(reading) : null;
+  return readings.map(formatReading);
 }
 
 async function fetchRoomReadings(roomId, query) {
@@ -194,7 +150,6 @@ async function aggregateReadings({ sensorId, from, to, interval }) {
 module.exports = {
   buildReadingFilter,
   fetchReadings,
-  fetchLatestReading,
   fetchRoomReadings,
   aggregateReadings,
   formatReading,

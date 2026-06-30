@@ -20,9 +20,17 @@ const readingSchema = new mongoose.Schema({
   periodIn: { type: Number, default: 0 },
   periodOut: { type: Number, default: 0 },
   occupancy: { type: Number, default: 0 },
+}, {
+  timeseries: {
+    timeField: "timestamp",
+    metaField: "sensorId",
+    granularity: "minutes",
+  },
 });
 
-readingSchema.index({ sensorId: 1, timestamp: -1 });
-readingSchema.index({ roomId: 1, timestamp: -1 });
-
 module.exports = mongoose.model("Reading", readingSchema);
+
+
+
+
+

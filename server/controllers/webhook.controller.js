@@ -7,9 +7,8 @@ const { extractLineCounts } = require("../services/webhook.service");
 
 function verifyApiKey(req, res) {
   const apiKey = process.env.WEBHOOK_API_KEY;
-  if (!apiKey) return true;
-
   const headerKey = req.headers["x-api-key"];
+
   if (headerKey !== apiKey) {
     res.status(401).json({ ok: false, error: "Neautorizováno" });
     return false;
@@ -56,7 +55,6 @@ router.post("/", async (req, res) => {
     sensor.lastSeenAt = new Date();
     await sensor.save();
 
-    console.log(`[COLLECT] ${sensor.name} → obsazenost: ${occupancy}`);
     res.status(200).json({ ok: true, occupancy });
   } catch (err) {
     console.error("[COLLECT] Chyba:", err.message);

@@ -161,7 +161,8 @@ export default function FloorPlan() {
 
       {deletingRoom && (
         <ConfirmModal
-          sensor={deletingRoom}
+          title="Opravdu chcete smazat místnost?"
+          itemName={deletingRoom.name}
           onConfirm={handleDelete}
           onClose={() => setDeletingRoom(null)}
         />

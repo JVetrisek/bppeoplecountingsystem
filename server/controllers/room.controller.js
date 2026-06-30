@@ -5,7 +5,7 @@ const Room = require("../models/room");
 const { formatRoomDetail, formatRoomListItem } = require("../services/room.service");
 const { fetchRoomReadings } = require("../services/reading.service");
 const { handleControllerError } = require("../services/error.service");
-const { authenticate, requireAdmin } = require("../middleware/auth.middleware");
+const { requireAdmin } = require("../middleware/auth.middleware");
 
 function parseCapacity(capacity) {
   if (capacity === undefined || capacity === null || capacity === "") return null;
@@ -14,7 +14,7 @@ function parseCapacity(capacity) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-router.get("/", authenticate, async (req, res) => {
+router.get("/", async (req, res) => {
   try {
     const rooms = await Room.find().populate("sensorId", "name devEui lastSeenAt");
     const roomsWithOccupancy = await Promise.all(rooms.map(formatRoomListItem));
@@ -24,7 +24,7 @@ router.get("/", authenticate, async (req, res) => {
   }
 });
 
-router.get("/:id/readings", authenticate, async (req, res) => {
+router.get("/:id/readings", async (req, res) => {
   try {
     const result = await fetchRoomReadings(req.params.id, req.query);
     if (!result) return res.status(404).json({ error: "Místnost nenalezena" });
@@ -44,7 +44,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-router.post("/", authenticate, requireAdmin, async (req, res) => {
+router.post("/", requireAdmin, async (req, res) => {
   const name = typeof req.body.name === "string" ? req.body.name.trim() : "";
   const capacity = parseCapacity(req.body.capacity);
   const { geometry } = req.body;
@@ -63,7 +63,7 @@ router.post("/", authenticate, requireAdmin, async (req, res) => {
 });
 
 // sensorId: <id> → přiřadí senzor | sensorId: null → odpojí | chybí → nemění
-router.patch("/:id", authenticate, requireAdmin, async (req, res) => {
+router.patch("/:id", requireAdmin, async (req, res) => {
   try {
     const room = await Room.findById(req.params.id);
     if (!room) return res.status(404).json({ error: "Místnost nenalezena" });
@@ -114,7 +114,7 @@ router.patch("/:id", authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-router.delete("/:id", authenticate, requireAdmin, async (req, res) => {
+router.delete("/:id", requireAdmin, async (req, res) => {
   try {
     const room = await Room.findById(req.params.id);
     if (!room) return res.status(404).json({ error: "Místnost nenalezena" });

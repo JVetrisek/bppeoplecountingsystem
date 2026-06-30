@@ -1,10 +1,10 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getUsers, deleteUser } from '../api/users.api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
 import UserTable from '../components/users/UserTable';
 import UserModal from '../components/users/UserModal';
-import ConfirmModal from '../components/users/ConfirmModal';
+import ConfirmModal from '../components/ConfirmModal';
 import Icon from '../components/Icon';
 
 export default function Users() {
@@ -16,33 +16,38 @@ export default function Users() {
   const [editingUser, setEditingUser] = useState(null);
   const [deletingUser, setDeletingUser] = useState(null);
 
-  const stats = useMemo(() => ({
-    total: users.length,
-    admins: users.filter((u) => u.role === 'admin').length,
-    viewers: users.filter((u) => u.role === 'viewer').length,
-  }), [users]);
-
-  const fetchUsers = async () => {
-    try {
-      const { data } = await getUsers();
-      setUsers(data);
-    } catch (err) {
-      console.error('Chyba při načítání uživatelů:', err);
-      addToast('Chyba při načítání uživatelů', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const refreshUsers = useCallback(async () => {
+    const { data } = await getUsers();
+    setUsers(data);
+  }, []);
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    let active = true;
+
+    getUsers()
+      .then(({ data }) => {
+        if (active) setUsers(data);
+      })
+      .catch((err) => {
+        if (active) {
+          console.error('Chyba při načítání uživatelů:', err);
+          addToast('Chyba při načítání uživatelů', 'error');
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [addToast]);
 
   const handleDelete = async () => {
     try {
       await deleteUser(deletingUser.id);
       addToast('Uživatel smazán', 'success');
-      await fetchUsers();
+      await refreshUsers();
       setDeletingUser(null);
     } catch (err) {
       const message = err.response?.data?.error || 'Chyba při mazání uživatele';
@@ -69,22 +74,7 @@ export default function Users() {
   }
 
   return (
-    <div className="h-full flex flex-col gap-4 min-h-0">
-      <div className="grid grid-cols-3 gap-4">
-        <div className="card bg-base-100 p-4">
-          <div className="text-sm text-base-content/50">Celkem uživatelů</div>
-          <div className="text-3xl font-bold mt-1">{stats.total}</div>
-        </div>
-        <div className="card bg-base-100 p-4">
-          <div className="text-sm text-base-content/50">Administrátoři</div>
-          <div className="text-3xl font-bold mt-1">{stats.admins}</div>
-        </div>
-        <div className="card bg-base-100 p-4">
-          <div className="text-sm text-base-content/50">Vieweři</div>
-          <div className="text-3xl font-bold mt-1">{stats.viewers}</div>
-        </div>
-      </div>
-
+    <div className="h-full flex flex-col min-h-0">
       <div className="card bg-base-100 p-4 flex-1 min-h-0 flex flex-col">
         <div className="flex justify-between items-center mb-3 flex-shrink-0">
           <div className="font-bold text-lg">Správa uživatelů</div>
@@ -109,13 +99,14 @@ export default function Users() {
             setModalOpen(false);
             setEditingUser(null);
           }}
-          onSaved={fetchUsers}
+          onSaved={refreshUsers}
         />
       )}
 
       {deletingUser && (
         <ConfirmModal
-          user={deletingUser}
+          title="Opravdu chcete smazat uživatele?"
+          itemName={deletingUser.name}
           onConfirm={handleDelete}
           onClose={() => setDeletingUser(null)}
         />

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { getSensors, createSensor, updateSensor, deleteSensor } from '../api/api';
+import { useState, useEffect, useMemo } from 'react';
+import { getSensors, getRooms, createSensor, updateSensor, deleteSensor } from '../api/api';
 import SensorTable from '../components/sensors/SensorTable';
 import SensorModal from '../components/sensors/SensorModal';
 import ConfirmModal from '../components/ConfirmModal';
@@ -9,11 +9,23 @@ import Icon from '../components/Icon';
 export default function Sensors() {
   const { addToast } = useToast();
   const [sensors, setSensors] = useState([]);
+  const [rooms, setRooms] = useState([]);
   const [loading, setLoading] = useState(true);
   const [modalOpen, setModalOpen] = useState(false);
   const [editingSensor, setEditingSensor] = useState(null);
   const [deletingSensor, setDeletingSensor] = useState(null);
   const [saveError, setSaveError] = useState(null);
+
+  const stats = useMemo(() => {
+    const assigned = sensors.filter((s) => s.room).length;
+    const totalCapacity = rooms.reduce((sum, room) => sum + (room.capacity || 0), 0);
+
+    return {
+      registered: sensors.length,
+      totalCapacity,
+      assigned,
+    };
+  }, [sensors, rooms]);
 
   const getErrorField = (message) => {
     const lower = message.toLowerCase();
@@ -23,20 +35,36 @@ export default function Sensors() {
     return null;
   };
 
-  const fetchSensors = async () => {
-    try {
-      const { data } = await getSensors();
-      setSensors(data);
-    } catch (err) {
-      console.error('Chyba při načítání senzorů:', err);
-    } finally {
-      setLoading(false);
-    }
+  const fetchData = async () => {
+    const [sensorsRes, roomsRes] = await Promise.all([getSensors(), getRooms()]);
+    setSensors(sensorsRes.data);
+    setRooms(roomsRes.data);
   };
 
   useEffect(() => {
-    fetchSensors();
-  }, []);
+    let active = true;
+
+    Promise.all([getSensors(), getRooms()])
+      .then(([sensorsRes, roomsRes]) => {
+        if (active) {
+          setSensors(sensorsRes.data);
+          setRooms(roomsRes.data);
+        }
+      })
+      .catch((err) => {
+        if (active) {
+          console.error('Chyba při načítání senzorů:', err);
+          addToast('Chyba při načítání senzorů', 'error');
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [addToast]);
 
   const handleSave = async (formData) => {
     try {
@@ -48,7 +76,7 @@ export default function Sensors() {
         addToast('Senzor vytvořen', 'success');
       }
       setSaveError(null);
-      await fetchSensors();
+      await fetchData();
       setModalOpen(false);
       setEditingSensor(null);
     } catch (err) {
@@ -62,7 +90,7 @@ export default function Sensors() {
     try {
       await deleteSensor(deletingSensor.id);
       addToast('Senzor smazán', 'success');
-      await fetchSensors();
+      await fetchData();
       setDeletingSensor(null);
     } catch (err) {
       console.error('Chyba při mazání senzoru:', err);
@@ -84,14 +112,31 @@ export default function Sensors() {
 
   if (loading) {
     return (
-      <div className="h-full">
-        <div className="card bg-base-100 p-4 h-full">Načítání...</div>
+      <div className="h-full flex items-center justify-center">
+        <span className="loading loading-spinner loading-lg text-primary" />
       </div>
     );
   }
 
   return (
-    <div className="h-full flex flex-col min-h-0">
+    <div className="h-full flex flex-col gap-4 min-h-0">
+      <div className="grid grid-cols-3 gap-4">
+        <div className="card bg-base-100 p-4">
+          <div className="text-sm text-base-content/50">Registrované senzory</div>
+          <div className="text-3xl font-bold mt-1">{stats.registered}</div>
+        </div>
+        <div className="card bg-base-100 p-4">
+          <div className="text-sm text-base-content/50">Celková kapacita</div>
+          <div className="text-3xl font-bold mt-1">{stats.totalCapacity}</div>
+        </div>
+        <div className="card bg-base-100 p-4">
+          <div className="text-sm text-base-content/50">Přiřazeno k místnostem</div>
+          <div className="text-3xl font-bold mt-1">
+            {stats.assigned} / {stats.registered}
+          </div>
+        </div>
+      </div>
+
       <div className="card bg-base-100 p-4 flex-1 min-h-0 flex flex-col">
         <div className="flex justify-between items-center mb-3 flex-shrink-0">
           <div className="font-bold text-lg">Správa senzorů</div>
@@ -124,7 +169,8 @@ export default function Sensors() {
 
       {deletingSensor && (
         <ConfirmModal
-          sensor={deletingSensor}
+          title="Opravdu chcete smazat senzor?"
+          itemName={deletingSensor.name}
           onConfirm={handleDelete}
           onClose={() => setDeletingSensor(null)}
         />

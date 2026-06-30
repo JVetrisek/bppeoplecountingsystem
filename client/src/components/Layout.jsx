@@ -25,7 +25,7 @@ export default function Layout() {
           {isAdmin && (
             <>
               <NavLink
-                to="/plan"
+                to="/floorPlan"
                 className={({ isActive }) => `btn btn-sm ${isActive ? 'btn-primary' : 'btn-ghost'}`}
               >
                 Plánek

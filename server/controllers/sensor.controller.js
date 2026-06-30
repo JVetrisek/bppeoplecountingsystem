@@ -3,9 +3,9 @@ const router = express.Router();
 const Sensor = require("../models/Sensor");
 const { formatSensor, formatSensors } = require("../services/sensor.service");
 const { handleControllerError } = require("../services/error.service");
-const { authenticate, requireAdmin } = require("../middleware/auth.middleware");
+const { requireAdmin } = require("../middleware/auth.middleware");
 
-router.get("/", authenticate, async (req, res) => {
+router.get("/", async (req, res) => {
   try {
     const sensors = await Sensor.find();
     res.json(await formatSensors(sensors));
@@ -24,7 +24,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-router.post("/", authenticate, requireAdmin, async (req, res) => {
+router.post("/", requireAdmin, async (req, res) => {
   const name = typeof req.body.name === "string" ? req.body.name.trim() : "";
   const devEui = typeof req.body.devEui === "string" ? req.body.devEui.trim() : "";
 
@@ -45,7 +45,7 @@ router.post("/", authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-router.patch("/:id", authenticate, requireAdmin, async (req, res) => {
+router.patch("/:id", requireAdmin, async (req, res) => {
   const updates = { ...req.body };
 
   if ("name" in req.body) {
@@ -73,7 +73,7 @@ router.patch("/:id", authenticate, requireAdmin, async (req, res) => {
   }
 });
 
-router.delete("/:id", authenticate, requireAdmin, async (req, res) => {
+router.delete("/:id", requireAdmin, async (req, res) => {
   try {
     const sensor = await Sensor.findById(req.params.id);
     if (!sensor) return res.status(404).json({ error: "Senzor nenalezen" });
