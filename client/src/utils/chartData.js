@@ -1,3 +1,5 @@
+import { getAggregate, getRoomReadings, getReadings } from '../api/api';
+
 export function getRangeConfig(range) {
   const now = new Date();
 
@@ -156,15 +158,37 @@ export function computeStats(data, isRoom) {
   };
 }
 
-export function buildChartParams(range) {
-  const { interval, from } = getRangeConfig(range);
-  return { from: from.toISOString(), interval };
-}
-
 export function getModalPresetConfig(range) {
   const config = getRangeConfig(range);
   if (range === 'live') {
     return { ...config, interval: 'minute' };
   }
   return config;
+}
+
+export async function fetchChartData(roomId, rangeConfig) {
+  const { from, to, interval } = rangeConfig;
+  const params = {
+    from: from.toISOString(),
+    to: to.toISOString(),
+    limit: 1000,
+  };
+
+  if (interval === 'minute') {
+    if (roomId) {
+      const { data } = await getRoomReadings(roomId, params);
+      return [...data.readings].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
+    }
+    const { data } = await getReadings(params);
+    return bucketFloorReadings(data);
+  }
+
+  if (roomId) {
+    const { data } = await getRoomReadings(roomId, params);
+    const aggregated = aggregateRoomReadings(data.readings, interval);
+    return fillTimeSlots(aggregated, from, to, interval, true);
+  }
+
+  const { data } = await getAggregate({ ...params, interval });
+  return fillTimeSlots(data, from, to, interval, false);
 }

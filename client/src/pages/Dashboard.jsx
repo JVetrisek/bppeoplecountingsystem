@@ -1,11 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { getRooms, getAggregate, getRoomReadings } from '../api/api';
+import { getRooms } from '../api/api';
 import StatsBar from '../components/StatsBar';
 import OccupancyChart from '../components/dashboard/OccupancyChart';
 import ChartModal from '../components/dashboard/ChartModal';
 import RoomList from '../components/dashboard/RoomList';
 import FloorMap from '../components/dashboard/FloorMap';
-import { getRangeConfig, fillTimeSlots, buildChartParams } from '../utils/chartData';
+import { getModalPresetConfig, fetchChartData } from '../utils/chartData';
 
 export default function Dashboard() {
   const [rooms, setRooms] = useState([]);
@@ -15,7 +15,7 @@ export default function Dashboard() {
   const [chartModalOpen, setChartModalOpen] = useState(false);
   const pollingRef = useRef(null);
 
-  const rangeConfig = getRangeConfig(chartRange);
+  const rangeConfig = getModalPresetConfig(chartRange);
 
   const fetchRooms = useCallback(async () => {
     try {
@@ -27,18 +27,7 @@ export default function Dashboard() {
   }, []);
 
   const fetchChart = useCallback(async (roomId, range) => {
-    const params = buildChartParams(range);
-    const { data } = roomId
-      ? await getRoomReadings(roomId, params)
-      : await getAggregate(params);
-    const raw = roomId ? data.readings : data;
-    const { interval, from, to } = getRangeConfig(range);
-
-    if (range === 'live') {
-      return [...raw].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-    }
-
-    return fillTimeSlots(raw, from, to, interval, !!roomId);
+    return fetchChartData(roomId, getModalPresetConfig(range));
   }, []);
 
   useEffect(() => {

@@ -1,12 +1,9 @@
 import { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
-import { getAggregate, getRoomReadings, getReadings } from '../../api/api';
 import {
   getModalPresetConfig,
   getCustomRangeConfig,
-  fillTimeSlots,
-  aggregateRoomReadings,
-  bucketFloorReadings,
+  fetchChartData,
   computeStats,
   hasChartData,
 } from '../../utils/chartData';
@@ -81,33 +78,6 @@ function formatTooltipLabel(timestamp, hours) {
     hour: '2-digit',
     minute: '2-digit',
   });
-}
-
-async function fetchChartData(roomId, rangeConfig) {
-  const { from, to, interval } = rangeConfig;
-  const params = {
-    from: from.toISOString(),
-    to: to.toISOString(),
-    limit: 1000,
-  };
-
-  if (interval === 'minute') {
-    if (roomId) {
-      const { data } = await getRoomReadings(roomId, params);
-      return [...data.readings].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-    }
-    const { data } = await getReadings(params);
-    return bucketFloorReadings(data);
-  }
-
-  if (roomId) {
-    const { data } = await getRoomReadings(roomId, params);
-    const aggregated = aggregateRoomReadings(data.readings, interval);
-    return fillTimeSlots(aggregated, from, to, interval, true);
-  }
-
-  const { data } = await getAggregate({ ...params, interval });
-  return fillTimeSlots(data, from, to, interval, false);
 }
 
 function StatCard({ label, value }) {
