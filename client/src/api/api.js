@@ -14,6 +14,7 @@ export const deleteRoom = (id) => api.delete(`/api/rooms/${id}`);
 export const getRoomReadings = (id, params) => api.get(`/api/rooms/${id}/readings`, { params });
 
 // Readings
+export const getReadings = (params) => api.get('/api/readings', { params });
 export const getAggregate = (params) => api.get('/api/readings/aggregate', { params });
 
 export default api;

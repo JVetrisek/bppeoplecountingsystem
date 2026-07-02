@@ -1,5 +1,7 @@
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import Icon from '../Icon';
+import ChartEmptyState from './ChartEmptyState';
+import { hasChartData } from '../../utils/chartData';
 
 const RANGES = ['live', '12h', '24h', '7d', '30d'];
 
@@ -11,89 +13,179 @@ const RANGE_LABELS = {
   '30d': 'Měsíc',
 };
 
-function formatTime(timestamp, range) {
-  if (!timestamp) return '';
+const DAY_NAMES = ['Ne', 'Po', 'Út', 'St', 'Čt', 'Pá', 'So'];
+
+function formatTick(timestamp, range) {
   const d = new Date(timestamp);
-  if (range === '7d' || range === '30d') {
+
+  if (range === 'live' || range === '12h' || range === '24h') {
+    return d.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
+  }
+
+  if (range === '30d') {
     return d.toLocaleDateString('cs-CZ', { day: 'numeric', month: 'numeric' });
   }
+
+  if (range === '7d') {
+    const time = d.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
+    return `${DAY_NAMES[d.getDay()]} ${time}`;
+  }
+
   return d.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
 }
 
-export default function OccupancyChart({ data, room, range, onRangeChange, totalCapacity, onBack, roomCount }) {
-    const title = room ? room.name : 'Celé podlaží';
-    const subtitle = room ? null : `${roomCount ?? 0} sledovaných místností`;
-  
-    const chartData = data.map(d => ({
-      time: formatTime(d.timestamp, range),
-      value: room ? d.occupancy : d.avgOccupancy,
-    }));
-  
-    return (
-      <div className="card bg-base-100 p-4">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <div className="font-bold text-lg">{title}</div>
-            {subtitle && <div className="text-sm text-base-content/50">{subtitle}</div>}
-          </div>
-          {room && (
-            <button className="btn btn-sm btn-ghost btn-square" onClick={onBack} aria-label="Zpět">
-              <Icon name="x-circle" className="size-5" />
-            </button>
-          )}
-        </div>
-  
-        <ResponsiveContainer width="100%" height={200}>
-          <AreaChart data={chartData}>
-            <defs>
-              <linearGradient id="colorOccupancy" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="5%" stopColor="#2196F3" stopOpacity={0.3} />
-                <stop offset="95%" stopColor="#2196F3" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <XAxis
-              dataKey="time"
-              tick={{ fontSize: 11, fill: '#999' }}
-              tickLine={false}
-              axisLine={false}
-              interval="preserveStartEnd"
-            />
-            <YAxis hide />
-            <Tooltip
-              formatter={(value) => [value, 'Obsazenost']}
-              labelStyle={{ color: '#666' }}
-            />
-            {totalCapacity && (
-              <ReferenceLine
-                y={totalCapacity}
-                stroke="#ccc"
-                strokeDasharray="4 4"
-                label={{ value: `kapacita ${totalCapacity}`, position: 'right', fontSize: 11, fill: '#999' }}
-              />
-            )}
-            <Area
-              type="monotone"
-              dataKey="value"
-              stroke="#2196F3"
-              strokeWidth={2}
-              fill="url(#colorOccupancy)"
-              dot={false}
-              activeDot={{ r: 4, fill: '#2196F3' }}
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-  
-        <div className="flex flex-wrap justify-center gap-1 mt-3">
-          {RANGES.map(r => (
-            <button
-              key={r}
-              className={`btn btn-xs ${range === r ? 'btn-primary' : 'btn-ghost'}`}
-              onClick={() => onRangeChange(r)}
-            >
-              {RANGE_LABELS[r]}
-            </button>
-          ))}
-        </div>
-      </div>
-    );
+function formatTooltipLabel(timestamp, range) {
+  const d = new Date(timestamp);
+
+  if (range === 'live' || range === '12h' || range === '24h') {
+    return d.toLocaleString('cs-CZ', {
+      day: 'numeric',
+      month: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
   }
+
+  if (range === '30d') {
+    return d.toLocaleDateString('cs-CZ', {
+      day: 'numeric',
+      month: 'numeric',
+      year: 'numeric',
+    });
+  }
+
+  if (range === '7d') {
+    return d.toLocaleString('cs-CZ', {
+      weekday: 'short',
+      day: 'numeric',
+      month: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  }
+
+  return d.toLocaleString('cs-CZ', {
+    day: 'numeric',
+    month: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function ExpandIcon() {
+  return (
+    <svg className="size-4" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" aria-hidden="true">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 3.75v4.5m0-4.5h4.5m-4.5 0L9 9M3.75 20.25v-4.5m0 4.5h4.5m-4.5 0L9 15M20.25 3.75h-4.5m4.5 0v4.5m0-4.5L15 9m5.25 11.25h-4.5m4.5 0v-4.5m0 4.5L15 15" />
+    </svg>
+  );
+}
+
+export default function OccupancyChart({
+  data,
+  room,
+  range,
+  onRangeChange,
+  onExpand,
+  totalCapacity,
+  onBack,
+  roomCount,
+  from,
+  to,
+}) {
+  const title = room ? room.name : 'Celé podlaží';
+  const subtitle = room ? null : `${roomCount ?? 0} sledovaných místností`;
+  const xMax = to;
+
+  const chartData = data.map((d) => ({
+    timestamp: new Date(d.timestamp).getTime(),
+    value: room ? d.occupancy : d.avgOccupancy,
+  }));
+  const hasData = hasChartData(data, !!room);
+
+  return (
+    <div className="card bg-base-100 p-4">
+      <div className="flex justify-between items-start mb-4">
+        <div>
+          <div className="font-bold text-lg">{title}</div>
+          {subtitle && <div className="text-sm text-base-content/50">{subtitle}</div>}
+        </div>
+        {room && (
+          <button className="btn btn-sm btn-ghost btn-square" onClick={onBack} aria-label="Zpět">
+            <Icon name="x-circle" className="size-5" />
+          </button>
+        )}
+      </div>
+
+      {hasData ? (
+        <ResponsiveContainer width="100%" height={200}>
+          <AreaChart data={chartData} margin={{ left: 0, right: 8 }}>
+          <defs>
+            <linearGradient id="colorOccupancy" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="5%" stopColor="#2196F3" stopOpacity={0.3} />
+              <stop offset="95%" stopColor="#2196F3" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <XAxis
+            type="number"
+            dataKey="timestamp"
+            domain={[from, xMax]}
+            scale="time"
+            allowDataOverflow
+            tickFormatter={(ts) => formatTick(ts, range)}
+            tick={{ fontSize: 11, fill: '#999' }}
+            tickLine={false}
+            axisLine={false}
+            interval="preserveStartEnd"
+          />
+          <YAxis hide domain={[0, 'auto']} />
+          <Tooltip
+            labelFormatter={(ts) => formatTooltipLabel(ts, range)}
+            formatter={(value) => [value, 'Obsazenost']}
+            labelStyle={{ color: '#666' }}
+          />
+          {totalCapacity > 0 && (
+            <ReferenceLine
+              y={totalCapacity}
+              stroke="#ccc"
+              strokeDasharray="4 4"
+              label={{ value: `kapacita ${totalCapacity}`, position: 'right', fontSize: 11, fill: '#999' }}
+            />
+          )}
+          <Area
+            type="monotone"
+            dataKey="value"
+            stroke="#2196F3"
+            strokeWidth={2}
+            fill="url(#colorOccupancy)"
+            dot={false}
+            connectNulls={false}
+            activeDot={{ r: 4, fill: '#2196F3' }}
+          />
+        </AreaChart>
+        </ResponsiveContainer>
+      ) : (
+        <ChartEmptyState height={200} />
+      )}
+
+      <div className="flex flex-wrap justify-center items-center gap-1 mt-3">
+        {RANGES.map((r) => (
+          <button
+            key={r}
+            className={`btn btn-xs ${range === r ? 'btn-primary' : 'btn-ghost'}`}
+            onClick={() => onRangeChange(r)}
+          >
+            {RANGE_LABELS[r]}
+          </button>
+        ))}
+        <button
+          type="button"
+          className="btn btn-xs btn-ghost btn-square"
+          onClick={onExpand}
+          aria-label="Rozbalit graf"
+        >
+          <ExpandIcon />
+        </button>
+      </div>
+    </div>
+  );
+}

@@ -10,9 +10,9 @@ const Sensor = require("../models/Sensor");
 const Reading = require("../models/Reading");
 
 const REAL_DEV_EUI = "24E124767F020849";
-const NOW = new Date("2026-06-26T17:53:00.000Z"); // 19:53 CEST
-const MONTH_AGO = new Date("2026-05-27T00:00:00.000Z");
-const LAST_DAY_START = new Date("2026-06-26T00:00:00.000Z");
+const NOW = new Date();
+const TWELVE_HOURS_AGO = new Date(NOW - 12 * 3600 * 1000);
+const MONTH_AGO = new Date(NOW - 30 * 24 * 3600 * 1000);
 
 function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -63,9 +63,9 @@ function generateForRoom(room, sensor) {
     });
   };
 
-  // Zbytek měsíce — každých 30 minut (7:00–20:00)
+  // Starší období (30 dní zpět až před 12 h) — každých 30 minut (7:00–20:00)
   const day = new Date(MONTH_AGO);
-  while (day < LAST_DAY_START) {
+  while (day < TWELVE_HOURS_AGO) {
     for (let hour = 7; hour <= 20; hour++) {
       for (const minute of [0, 30]) {
         const timestamp = new Date(Date.UTC(
@@ -75,14 +75,15 @@ function generateForRoom(room, sensor) {
           hour,
           minute
         ));
+        if (timestamp >= TWELVE_HOURS_AGO) continue;
         addReading(timestamp, room.capacity);
       }
     }
     day.setUTCDate(day.getUTCDate() + 1);
   }
 
-  // Poslední den — každých 5 minut do 19:53
-  for (let t = LAST_DAY_START.getTime(); t <= NOW.getTime(); t += 5 * 60 * 1000) {
+  // Posledních 12 hodin — každých 5 minut
+  for (let t = TWELVE_HOURS_AGO.getTime(); t <= NOW.getTime(); t += 5 * 60 * 1000) {
     addReading(new Date(t), room.capacity);
   }
 
@@ -102,6 +103,10 @@ async function seed() {
     process.exit(0);
   }
 
+  const sensorIds = toSeed.map((room) => room.sensorId._id);
+  const deleted = await Reading.deleteMany({ sensorId: { $in: sensorIds } });
+  console.log(`🗑️  Smazáno ${deleted.deletedCount} starých readings (mock senzory)`);
+
   const allReadings = [];
   for (const room of toSeed) {
     const generated = generateForRoom(room, room.sensorId);
@@ -115,8 +120,11 @@ async function seed() {
     await Reading.insertMany(allReadings.slice(i, i + BATCH), { ordered: false });
   }
 
+  const last12hCount = allReadings.filter((r) => r.timestamp >= TWELVE_HOURS_AGO).length;
   console.log(`\n✅ Celkem vloženo ${allReadings.length} readings pro ${toSeed.length} místností`);
+  console.log(`📊 Z toho ${last12hCount} záznamů za posledních 12 h (každých 5 min)`);
   console.log(`⏭️  Přeskočeno: reálný senzor (${REAL_DEV_EUI})`);
+  console.log(`🕐 Rozsah dat: ${MONTH_AGO.toISOString()} → ${NOW.toISOString()}`);
   process.exit(0);
 }
 

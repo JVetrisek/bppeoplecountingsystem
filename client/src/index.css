@@ -16,3 +16,14 @@
   border-color: var(--color-primary);
   box-shadow: none;
 }
+
+.input-no-icon[type="date"],
+.input-no-icon[type="time"] {
+  appearance: none;
+  -webkit-appearance: none;
+}
+
+.input-no-icon::-webkit-calendar-picker-indicator {
+  display: none;
+  -webkit-appearance: none;
+}
