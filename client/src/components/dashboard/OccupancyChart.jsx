@@ -1,7 +1,7 @@
-import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import Icon from '../Icon';
-import ChartEmptyState from './ChartEmptyState';
-import { hasChartData } from '../../utils/chartData';
+import ChartEmptyState, { hasChartData } from './ChartEmptyState';
+import CapacityReferenceLine from './CapacityReferenceLine';
 
 const RANGES = ['live', '12h', '24h', '7d', '30d'];
 
@@ -12,8 +12,6 @@ const RANGE_LABELS = {
   '7d': 'Týden',
   '30d': 'Měsíc',
 };
-
-const DAY_NAMES = ['Ne', 'Po', 'Út', 'St', 'Čt', 'Pá', 'So'];
 
 function formatTick(timestamp, range) {
   const d = new Date(timestamp);
@@ -27,8 +25,7 @@ function formatTick(timestamp, range) {
   }
 
   if (range === '7d') {
-    const time = d.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
-    return `${DAY_NAMES[d.getDay()]} ${time}`;
+    return d.toLocaleDateString('cs-CZ', { weekday: 'short', day: 'numeric' });
   }
 
   return d.toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
@@ -55,13 +52,7 @@ function formatTooltipLabel(timestamp, range) {
   }
 
   if (range === '7d') {
-    return d.toLocaleString('cs-CZ', {
-      weekday: 'short',
-      day: 'numeric',
-      month: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+    return d.toLocaleDateString('cs-CZ', { weekday: 'long', day: 'numeric', month: 'numeric', year: 'numeric' });
   }
 
   return d.toLocaleString('cs-CZ', {
@@ -101,6 +92,12 @@ export default function OccupancyChart({
     value: room ? d.occupancy : d.avgOccupancy,
   }));
   const hasData = hasChartData(data, !!room);
+  const maxValue = chartData.reduce((max, d) => (d.value != null ? Math.max(max, d.value) : max), 0);
+  const yMax = Math.max(totalCapacity || 0, maxValue || 0) * 1.1;
+  const capacityExceeded = maxValue > totalCapacity;
+  const tickCount = 4;
+  const step = (xMax - from) / tickCount;
+  const ticks = Array.from({ length: tickCount + 1 }, (_, i) => from + i * step);
 
   return (
     <div className="card bg-base-100 p-4">
@@ -131,25 +128,20 @@ export default function OccupancyChart({
             domain={[from, xMax]}
             scale="time"
             allowDataOverflow
+            ticks={ticks}
             tickFormatter={(ts) => formatTick(ts, range)}
             tick={{ fontSize: 11, fill: '#999' }}
             tickLine={false}
             axisLine={false}
-            interval="preserveStartEnd"
           />
-          <YAxis hide domain={[0, 'auto']} />
+          <YAxis hide domain={[0, yMax]} />
           <Tooltip
             labelFormatter={(ts) => formatTooltipLabel(ts, range)}
             formatter={(value) => [value, 'Obsazenost']}
             labelStyle={{ color: '#666' }}
           />
           {totalCapacity > 0 && (
-            <ReferenceLine
-              y={totalCapacity}
-              stroke="#ccc"
-              strokeDasharray="4 4"
-              label={{ value: `kapacita ${totalCapacity}`, position: 'right', fontSize: 11, fill: '#999' }}
-            />
+            <CapacityReferenceLine capacity={totalCapacity} exceeded={capacityExceeded} />
           )}
           <Area
             type="monotone"

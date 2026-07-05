@@ -4,7 +4,8 @@ import 'cally';
 function formatDisplayDate(dateStr) {
   if (!dateStr) return '—';
   const [year, month, day] = dateStr.split('-').map(Number);
-  return new Date(year, month - 1, day).toLocaleDateString('cs-CZ');
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${pad(day)}.${pad(month)}.${year}`;
 }
 
 function CalendarNavIcons() {
