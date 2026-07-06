@@ -28,36 +28,42 @@ function buildChartParams(range) {
   return { from: from.toISOString(), interval };
 }
 
-function truncateToHourUTC(date) {
+function truncateToHourLocal(date) {
   const d = new Date(date);
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), 0, 0, 0));
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), 0, 0, 0);
 }
 
-function truncateToDayUTC(date) {
+function truncateToDayLocal(date) {
   const d = new Date(date);
-  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), 0, 0, 0));
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
+}
+
+function pad2(n) {
+  return String(n).padStart(2, '0');
 }
 
 function slotKey(date, interval) {
   if (interval === 'day') {
-    return truncateToDayUTC(date).toISOString().slice(0, 10);
+    const d = truncateToDayLocal(date);
+    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
   }
-  return truncateToHourUTC(date).toISOString();
+  const d = truncateToHourLocal(date);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:00:00`;
 }
 
 function generateTimeSlots(from, to, interval) {
   const slots = [];
-  let current = interval === 'day' ? truncateToDayUTC(from) : truncateToHourUTC(from);
+  let current = interval === 'day' ? truncateToDayLocal(from) : truncateToHourLocal(from);
   const end = new Date(to);
 
   while (current <= end) {
     slots.push(new Date(current));
     if (interval === 'day') {
       current = new Date(current);
-      current.setUTCDate(current.getUTCDate() + 1);
+      current.setDate(current.getDate() + 1);
     } else {
       current = new Date(current);
-      current.setUTCHours(current.getUTCHours() + 1);
+      current.setHours(current.getHours() + 1);
     }
   }
 
