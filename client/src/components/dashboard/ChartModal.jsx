@@ -1,6 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { getAggregate, getRoomReadings, getReadings } from '../../api/api';
+import { aggregateLiveFloorReadings, getRoomSensorIds } from '../../utils/liveFloorAggregation';
+import { fillTimeSlots, slotKey, mergeAggregateSlots } from '../../utils/chartSlots';
+import OccupancyTooltip, { toChartPoints } from './OccupancyTooltip';
+import ChartAggregationHelp from './ChartAggregationHelp';
 import Icon from '../Icon';
 import CallyDatePicker from '../CallyDatePicker';
 import TimePicker from '../TimePicker';
@@ -52,86 +56,6 @@ function getModalPresetConfig(range) {
   return config;
 }
 
-function truncateToHourLocal(date) {
-  const d = new Date(date);
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), 0, 0, 0);
-}
-
-function truncateToDayLocal(date) {
-  const d = new Date(date);
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
-}
-
-function pad2(n) {
-  return String(n).padStart(2, '0');
-}
-
-function slotKey(date, interval) {
-  if (interval === 'day') {
-    const d = truncateToDayLocal(date);
-    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-  }
-  const d = truncateToHourLocal(date);
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:00:00`;
-}
-
-function generateTimeSlots(from, to, interval) {
-  const slots = [];
-  let current = interval === 'day' ? truncateToDayLocal(from) : truncateToHourLocal(from);
-  const end = new Date(to);
-
-  while (current <= end) {
-    slots.push(new Date(current));
-    if (interval === 'day') {
-      current = new Date(current);
-      current.setDate(current.getDate() + 1);
-    } else {
-      current = new Date(current);
-      current.setHours(current.getHours() + 1);
-    }
-  }
-
-  return slots;
-}
-
-function indexDataBySlot(data, interval, isRoom) {
-  const map = new Map();
-
-  for (const point of data) {
-    const key = slotKey(point.timestamp, interval);
-    const value = isRoom ? point.occupancy : point.avgOccupancy;
-    if (!map.has(key)) {
-      map.set(key, []);
-    }
-    map.get(key).push(value);
-  }
-
-  const result = new Map();
-  for (const [key, values] of map) {
-    result.set(key, values.reduce((sum, v) => sum + v, 0) / values.length);
-  }
-  return result;
-}
-
-function fillTimeSlots(data, from, to, interval, isRoom) {
-  const indexed = indexDataBySlot(data, interval, isRoom);
-
-  return generateTimeSlots(from, to, interval).map((slotDate) => {
-    const key = slotKey(slotDate, interval);
-    const value = indexed.get(key);
-
-    if (value === undefined) {
-      return isRoom
-        ? { timestamp: key, occupancy: null }
-        : { timestamp: key, avgOccupancy: null };
-    }
-
-    return isRoom
-      ? { timestamp: key, occupancy: value }
-      : { timestamp: key, avgOccupancy: value };
-  });
-}
-
 function aggregateRoomReadings(readings, interval) {
   const map = new Map();
 
@@ -146,24 +70,6 @@ function aggregateRoomReadings(readings, interval) {
     .map(([timestamp, values]) => ({
       timestamp,
       occupancy: Math.round(values.reduce((sum, v) => sum + v, 0) / values.length),
-    }));
-}
-
-function bucketFloorReadings(readings) {
-  const bucketMs = 5 * 60 * 1000;
-  const map = new Map();
-
-  for (const reading of readings) {
-    const bucket = Math.floor(new Date(reading.timestamp).getTime() / bucketMs) * bucketMs;
-    if (!map.has(bucket)) map.set(bucket, []);
-    map.get(bucket).push(reading.occupancy);
-  }
-
-  return [...map.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([ts, values]) => ({
-      timestamp: new Date(ts).toISOString(),
-      avgOccupancy: Math.round(values.reduce((sum, v) => sum + v, 0) / values.length),
     }));
 }
 
@@ -183,7 +89,7 @@ function computeStats(data, isRoom) {
   };
 }
 
-async function fetchChartData(roomId, rangeConfig) {
+async function fetchChartData(roomId, rangeConfig, rooms) {
   const { from, to, interval } = rangeConfig;
   const params = {
     from: from.toISOString(),
@@ -196,8 +102,11 @@ async function fetchChartData(roomId, rangeConfig) {
       const { data } = await getRoomReadings(roomId, params);
       return [...data.readings].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
     }
+    if (!rooms?.length) return [];
+
     const { data } = await getReadings(params);
-    return bucketFloorReadings(data);
+    const sensorIds = getRoomSensorIds(rooms);
+    return aggregateLiveFloorReadings(data, from, to, sensorIds, rooms);
   }
 
   if (roomId) {
@@ -207,7 +116,7 @@ async function fetchChartData(roomId, rangeConfig) {
   }
 
   const { data } = await getAggregate({ ...params, interval });
-  return fillTimeSlots(data, from, to, interval, false);
+  return mergeAggregateSlots(data, from, to, interval);
 }
 
 function toDateValue(date) {
@@ -282,12 +191,20 @@ export default function ChartModal({
   const [customApplied, setCustomApplied] = useState(null);
   const [chartData, setChartData] = useState([]);
   const [loading, setLoading] = useState(false);
+  const roomsRef = useRef(rooms);
+
+  useEffect(() => {
+    roomsRef.current = rooms;
+  }, [rooms]);
 
   const selectedRoom = rooms.find((r) => r.id === selectedRoomId) || null;
   const floorCapacity = rooms.reduce((s, r) => s + (r.capacity ?? 0), 0);
   const totalCapacity = selectedRoom ? selectedRoom.capacity : floorCapacity;
 
   const isCustom = !!customApplied;
+  const customRangeKey = customApplied
+    ? `${customApplied.from.getTime()}-${customApplied.to.getTime()}`
+    : '';
   const rangeConfig = isCustom
     ? getCustomRangeConfig(customApplied.from, customApplied.to)
     : getModalPresetConfig(range);
@@ -302,10 +219,7 @@ export default function ChartModal({
   const stats = computeStats(chartData, isRoom);
   const hasData = hasChartData(chartData, isRoom);
 
-  const chartPoints = chartData.map((d) => ({
-    timestamp: new Date(d.timestamp).getTime(),
-    value: isRoom ? d.occupancy : d.avgOccupancy,
-  }));
+  const chartPoints = toChartPoints(chartData, isRoom);
   const maxValue = chartPoints.reduce((max, d) => (d.value != null ? Math.max(max, d.value) : max), 0);
   const yMax = Math.max(totalCapacity || 0, maxValue || 0) * 1.1;
   const capacityExceeded = maxValue > totalCapacity;
@@ -319,15 +233,16 @@ export default function ChartModal({
 
   useEffect(() => {
     if (!open) return undefined;
+    if (!selectedRoomId && roomsRef.current.length === 0) return undefined;
 
     let active = true;
     setLoading(true);
 
-    const config = isCustom
+    const config = customRangeKey
       ? getCustomRangeConfig(customApplied.from, customApplied.to)
       : getModalPresetConfig(range);
 
-    fetchChartData(selectedRoomId, config)
+    fetchChartData(selectedRoomId, config, roomsRef.current)
       .then((result) => {
         if (active) setChartData(result);
       })
@@ -341,7 +256,7 @@ export default function ChartModal({
     return () => {
       active = false;
     };
-  }, [open, selectedRoomId, range, customApplied, isCustom]);
+  }, [open, selectedRoomId, range, customRangeKey, customApplied, rooms.length]);
 
   const handlePresetChange = (preset) => {
     setCustomApplied(null);
@@ -364,7 +279,7 @@ export default function ChartModal({
 
   return (
     <div className="modal modal-middle modal-open">
-      <div className="modal-box w-11/12 max-w-6xl h-[75vh] p-0 overflow-hidden flex flex-col">
+      <div className="modal-box w-11/12 max-w-6xl p-0 overflow-hidden flex flex-col">
         <div className="grid grid-cols-[auto_1fr_auto] items-end gap-4 px-4 py-3 border-b border-base-300 flex-shrink-0">
           <div className="font-bold text-lg flex-shrink-0">{title}</div>
 
@@ -449,9 +364,17 @@ export default function ChartModal({
           {!selectedRoom && (
             <div className="text-sm text-base-content/50 flex-shrink-0">{roomCount ?? 0} sledovaných místností</div>
           )}
-          <div className="flex-1 min-h-[300px] flex flex-col">
+          <div className="relative h-[300px] flex-shrink-0">
+          <div className="absolute -top-1 left-2 z-5">
+            <ChartAggregationHelp
+              isRoom={isRoom}
+              range={isCustom ? null : range}
+              interval={rangeConfig.interval}
+              iconClassName="size-[1.55rem]"
+            />
+          </div>
           {loading ? (
-            <div className="flex-1 flex items-center justify-center">
+            <div className="h-full flex items-center justify-center">
               <span className="loading loading-spinner loading-lg text-primary" />
             </div>
           ) : !hasData ? (
@@ -479,15 +402,17 @@ export default function ChartModal({
                   />
                   <YAxis hide domain={[0, yMax]} />
                   <Tooltip
-                    labelFormatter={(ts) => formatTooltipLabel(ts, rangeConfig.hours)}
-                    formatter={(value) => [value ?? '—', 'Obsazenost']}
-                    labelStyle={{ color: '#666' }}
+                    content={(
+                      <OccupancyTooltip
+                        formatLabel={(ts) => formatTooltipLabel(ts, rangeConfig.hours)}
+                      />
+                    )}
                   />
                   {totalCapacity > 0 && (
                     <CapacityReferenceLine capacity={totalCapacity} exceeded={capacityExceeded} />
                   )}
                   <Area
-                    type="monotone"
+                    type="linear"
                     dataKey="value"
                     stroke="#2196F3"
                     strokeWidth={2}

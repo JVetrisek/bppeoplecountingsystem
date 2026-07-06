@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { getRooms, getAggregate, getRoomReadings, getReadings } from '../api/api';
+import { aggregateLiveFloorReadings, getRoomSensorIds } from '../utils/liveFloorAggregation';
+import { fillTimeSlots, mergeAggregateSlots } from '../utils/chartSlots';
 import StatsBar from '../components/StatsBar';
 import OccupancyChart from '../components/dashboard/OccupancyChart';
 import ChartModal from '../components/dashboard/ChartModal';
@@ -24,88 +26,8 @@ function getRangeConfig(range) {
 }
 
 function buildChartParams(range) {
-  const { interval, from } = getRangeConfig(range);
-  return { from: from.toISOString(), interval };
-}
-
-function truncateToHourLocal(date) {
-  const d = new Date(date);
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), 0, 0, 0);
-}
-
-function truncateToDayLocal(date) {
-  const d = new Date(date);
-  return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0, 0, 0, 0);
-}
-
-function pad2(n) {
-  return String(n).padStart(2, '0');
-}
-
-function slotKey(date, interval) {
-  if (interval === 'day') {
-    const d = truncateToDayLocal(date);
-    return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
-  }
-  const d = truncateToHourLocal(date);
-  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}T${pad2(d.getHours())}:00:00`;
-}
-
-function generateTimeSlots(from, to, interval) {
-  const slots = [];
-  let current = interval === 'day' ? truncateToDayLocal(from) : truncateToHourLocal(from);
-  const end = new Date(to);
-
-  while (current <= end) {
-    slots.push(new Date(current));
-    if (interval === 'day') {
-      current = new Date(current);
-      current.setDate(current.getDate() + 1);
-    } else {
-      current = new Date(current);
-      current.setHours(current.getHours() + 1);
-    }
-  }
-
-  return slots;
-}
-
-function indexDataBySlot(data, interval, isRoom) {
-  const map = new Map();
-
-  for (const point of data) {
-    const key = slotKey(point.timestamp, interval);
-    const value = isRoom ? point.occupancy : point.avgOccupancy;
-    if (!map.has(key)) {
-      map.set(key, []);
-    }
-    map.get(key).push(value);
-  }
-
-  const result = new Map();
-  for (const [key, values] of map) {
-    result.set(key, values.reduce((sum, v) => sum + v, 0) / values.length);
-  }
-  return result;
-}
-
-function fillTimeSlots(data, from, to, interval, isRoom) {
-  const indexed = indexDataBySlot(data, interval, isRoom);
-
-  return generateTimeSlots(from, to, interval).map((slotDate) => {
-    const key = slotKey(slotDate, interval);
-    const value = indexed.get(key);
-
-    if (value === undefined) {
-      return isRoom
-        ? { timestamp: key, occupancy: null }
-        : { timestamp: key, avgOccupancy: null };
-    }
-
-    return isRoom
-      ? { timestamp: key, occupancy: value }
-      : { timestamp: key, avgOccupancy: value };
-  });
+  const { interval, from, to } = getRangeConfig(range);
+  return { from: from.toISOString(), to: to.toISOString(), interval };
 }
 
 export default function Dashboard() {
@@ -115,6 +37,11 @@ export default function Dashboard() {
   const [chartRange, setChartRange] = useState('live');
   const [chartModalOpen, setChartModalOpen] = useState(false);
   const pollingRef = useRef(null);
+  const roomsRef = useRef(rooms);
+
+  useEffect(() => {
+    roomsRef.current = rooms;
+  }, [rooms]);
 
   const rangeConfig = getRangeConfig(chartRange);
 
@@ -127,7 +54,7 @@ export default function Dashboard() {
     }
   }, []);
 
-  const fetchChart = useCallback(async (roomId, range) => {
+  const fetchChart = useCallback(async (roomId, range, roomsList) => {
     const { interval, from, to } = getRangeConfig(range);
 
     if (range === 'live') {
@@ -142,19 +69,28 @@ export default function Dashboard() {
         return [...data.readings].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
       }
 
+      if (!roomsList?.length) return [];
+
       const { data } = await getReadings(params);
-      return [...data]
-        .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
-        .map((d) => ({ timestamp: d.timestamp, avgOccupancy: d.occupancy }));
+      const sensorIds = getRoomSensorIds(roomsList);
+      return aggregateLiveFloorReadings(data, from, to, sensorIds, roomsList);
     }
 
     const params = buildChartParams(range);
-    const { data } = roomId
-      ? await getRoomReadings(roomId, params)
-      : await getAggregate(params);
-    const raw = roomId ? data.readings : data;
+    let raw;
+    if (roomId) {
+      const { data } = await getRoomReadings(roomId, params);
+      raw = data.readings;
+    } else {
+      const { data } = await getAggregate(params);
+      raw = data;
+    }
 
-    return fillTimeSlots(raw, from, to, interval, !!roomId);
+    if (!roomId) {
+      return mergeAggregateSlots(raw, from, to, interval);
+    }
+
+    return fillTimeSlots(raw, from, to, interval, true);
   }, []);
 
   useEffect(() => {
@@ -171,7 +107,7 @@ export default function Dashboard() {
     pollingRef.current = setInterval(() => {
       fetchRooms();
       if (chartRange === 'live') {
-        fetchChart(selectedId, chartRange)
+        fetchChart(selectedId, chartRange, roomsRef.current)
           .then((result) => {
             if (active) setChartData(result);
           })
@@ -188,9 +124,11 @@ export default function Dashboard() {
   }, [fetchRooms, fetchChart, selectedId, chartRange]);
 
   useEffect(() => {
+    if (chartRange === 'live' && !selectedId && rooms.length === 0) return undefined;
+
     let active = true;
 
-    fetchChart(selectedId, chartRange)
+    fetchChart(selectedId, chartRange, roomsRef.current)
       .then((result) => {
         if (active) setChartData(result);
       })
@@ -201,7 +139,7 @@ export default function Dashboard() {
     return () => {
       active = false;
     };
-  }, [selectedId, chartRange, fetchChart]);
+  }, [selectedId, chartRange, fetchChart, rooms.length]);
 
   const selectedRoom = rooms.find((r) => r.id === selectedId) || null;
 

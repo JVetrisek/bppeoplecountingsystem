@@ -2,6 +2,8 @@ import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'rec
 import Icon from '../Icon';
 import ChartEmptyState, { hasChartData } from './ChartEmptyState';
 import CapacityReferenceLine from './CapacityReferenceLine';
+import OccupancyTooltip, { toChartPoints } from './OccupancyTooltip';
+import ChartAggregationHelp from './ChartAggregationHelp';
 
 const RANGES = ['live', '12h', '24h', '7d', '30d'];
 
@@ -87,10 +89,7 @@ export default function OccupancyChart({
   const subtitle = room ? null : `${roomCount ?? 0} sledovaných místností`;
   const xMax = to;
 
-  const chartData = data.map((d) => ({
-    timestamp: new Date(d.timestamp).getTime(),
-    value: room ? d.occupancy : d.avgOccupancy,
-  }));
+  const chartData = toChartPoints(data, !!room);
   const hasData = hasChartData(data, !!room);
   const maxValue = chartData.reduce((max, d) => (d.value != null ? Math.max(max, d.value) : max), 0);
   const yMax = Math.max(totalCapacity || 0, maxValue || 0) * 1.1;
@@ -113,6 +112,10 @@ export default function OccupancyChart({
         )}
       </div>
 
+      <div className="relative">
+        <div className="absolute -top-2 left-1 z-5">
+          <ChartAggregationHelp isRoom={!!room} range={range} />
+        </div>
       {hasData ? (
         <ResponsiveContainer width="100%" height={200}>
           <AreaChart data={chartData} margin={{ left: 0, right: 8 }}>
@@ -136,15 +139,17 @@ export default function OccupancyChart({
           />
           <YAxis hide domain={[0, yMax]} />
           <Tooltip
-            labelFormatter={(ts) => formatTooltipLabel(ts, range)}
-            formatter={(value) => [value, 'Obsazenost']}
-            labelStyle={{ color: '#666' }}
+            content={(
+              <OccupancyTooltip
+                formatLabel={(ts) => formatTooltipLabel(ts, range)}
+              />
+            )}
           />
           {totalCapacity > 0 && (
             <CapacityReferenceLine capacity={totalCapacity} exceeded={capacityExceeded} />
           )}
           <Area
-            type="monotone"
+            type="linear"
             dataKey="value"
             stroke="#2196F3"
             strokeWidth={2}
@@ -158,6 +163,7 @@ export default function OccupancyChart({
       ) : (
         <ChartEmptyState height={200} />
       )}
+      </div>
 
       <div className="flex flex-wrap justify-center items-center gap-1 mt-3">
         {RANGES.map((r) => (
