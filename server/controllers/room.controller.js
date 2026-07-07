@@ -7,7 +7,6 @@ const {
   formatRoomListItemWithOccupancy,
   getRoomsOccupancyMap,
 } = require("../services/room.service");
-const { fetchRoomReadings } = require("../services/reading.service");
 const { handleControllerError } = require("../services/error.service");
 const { requireAdmin } = require("../middleware/auth.middleware");
 
@@ -24,26 +23,6 @@ router.get("/", async (req, res) => {
     const occupancyMap = await getRoomsOccupancyMap(rooms);
     const roomsWithOccupancy = rooms.map((room) => formatRoomListItemWithOccupancy(room, occupancyMap));
     res.json(roomsWithOccupancy);
-  } catch (err) {
-    handleControllerError(res, err);
-  }
-});
-
-router.get("/:id/readings", async (req, res) => {
-  try {
-    const result = await fetchRoomReadings(req.params.id, req.query);
-    if (!result) return res.status(404).json({ error: "Místnost nenalezena" });
-    res.json(result);
-  } catch (err) {
-    handleControllerError(res, err);
-  }
-});
-
-router.get("/:id", async (req, res) => {
-  try {
-    const room = await Room.findById(req.params.id).populate("sensorId", "name devEui");
-    if (!room) return res.status(404).json({ error: "Místnost nenalezena" });
-    res.json(await formatRoomDetail(room));
   } catch (err) {
     handleControllerError(res, err);
   }

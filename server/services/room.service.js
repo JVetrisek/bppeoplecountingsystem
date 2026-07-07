@@ -1,4 +1,6 @@
-const Reading = require("../models/Reading");
+const { getFreshOccupancyBySensor } = require("./reading.service");
+
+// Obsazenost místností — deleguje na getFreshOccupancyBySensor v reading.service.
 
 function resolveSensorId(room) {
   const sensorRef = room.sensorId;
@@ -15,40 +17,16 @@ function buildOccupancyData(room, currentOccupancy = 0) {
 }
 
 async function getRoomOccupancy(room) {
-  let currentOccupancy = 0;
   const sensorId = resolveSensorId(room);
+  if (!sensorId) return buildOccupancyData(room, 0);
 
-  if (sensorId) {
-    const lastReading = await Reading.findOne({ sensorId })
-      .sort({ timestamp: -1 })
-      .select("occupancy timestamp");
-    currentOccupancy = lastReading?.occupancy ?? 0;
-  }
-
-  return buildOccupancyData(room, currentOccupancy);
+  const occupancyBySensor = await getFreshOccupancyBySensor([sensorId]);
+  return buildOccupancyData(room, occupancyBySensor.get(String(sensorId)) ?? 0);
 }
 
 async function getRoomsOccupancyMap(rooms) {
-  const sensorIds = rooms
-    .map(resolveSensorId)
-    .filter(Boolean);
-
-  if (!sensorIds.length) return new Map();
-
-  const latestReadings = await Reading.aggregate([
-    { $match: { sensorId: { $in: sensorIds } } },
-    { $sort: { sensorId: 1, timestamp: -1 } },
-    {
-      $group: {
-        _id: "$sensorId",
-        occupancy: { $first: "$occupancy" },
-      },
-    },
-  ]);
-
-  return new Map(
-    latestReadings.map((reading) => [String(reading._id), reading.occupancy ?? 0])
-  );
+  const sensorIds = rooms.map(resolveSensorId).filter(Boolean);
+  return getFreshOccupancyBySensor(sensorIds);
 }
 
 function formatSensorRef(sensorRef) {

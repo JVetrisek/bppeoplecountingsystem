@@ -11,10 +11,7 @@ export const getRooms = () => api.get('/api/rooms');
 export const createRoom = (data) => api.post('/api/rooms', data);
 export const updateRoom = (id, data) => api.patch(`/api/rooms/${id}`, data);
 export const deleteRoom = (id) => api.delete(`/api/rooms/${id}`);
-export const getRoomReadings = (id, params) => api.get(`/api/rooms/${id}/readings`, { params });
 
-// Readings
-export const getReadings = (params) => api.get('/api/readings', { params });
 export const getAggregate = (params) => api.get('/api/readings/aggregate', { params });
 
 export default api;

@@ -10,9 +10,9 @@ function getAggregationHelpText({ isRoom, range, interval }) {
 
   if (mode === 'live') {
     if (isRoom) {
-      return 'Graf zobrazuje data za poslední hodinu pro konkrétní místnost.';
+      return 'Graf zobrazuje odečty za poslední hodinu v 5minutových blocích — v každém bloku poslední hodnota senzoru místnosti.';
     }
-    return 'Graf zobrazuje data za poslední hodinu pro celé podlaží. Data jsou sečtena do jednotlivých pětiminutových bloků a ukazují celkovou obsazenost podlaží.';
+    return 'Graf zobrazuje odečty za poslední hodinu v 5minutových blocích. V každém bloku se sečtou senzory, které v tom intervalu reportovaly. Poslední bod používá stejnou logiku jako karta „Osob v budově“ — součet nejnovějších odečtů z posledních 10 minut (senzor bez čerstvých dat = 0).';
   }
 
   if (mode === 'hour') {

@@ -31,17 +31,6 @@ router.get("/", async (req, res) => {
   }
 });
 
-router.get("/:id", async (req, res) => {
-  try {
-    const sensor = await Sensor.findById(req.params.id);
-    if (!sensor) return res.status(404).json({ error: "Senzor nenalezen" });
-    const roomMap = await buildRoomMap([sensor._id]);
-    res.json(await formatSensor(sensor, roomMap));
-  } catch (err) {
-    handleControllerError(res, err);
-  }
-});
-
 router.post("/", requireAdmin, async (req, res) => {
   const name = typeof req.body.name === "string" ? req.body.name.trim() : "";
   const devEui = typeof req.body.devEui === "string" ? req.body.devEui.trim() : "";

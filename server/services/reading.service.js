@@ -1,7 +1,12 @@
+const mongoose = require("mongoose");
 const Reading = require("../models/Reading");
 const Room = require("../models/Room");
 const { badRequest } = require("./error.service");
-const { aggregateFloorReadings, aggregateRoomReadings } = require("../utils/floorAggregation");
+
+const BUCKET_MS = 5 * 60 * 1000;
+const HOUR_MS = 60 * 60 * 1000;
+const DAY_MS = 24 * HOUR_MS;
+const FRESH_READING_MS = 10 * 60 * 1000; // 2× interval senzoru; starší odečet = senzor offline
 
 function parseDateParam(value) {
   const date = new Date(value);
@@ -11,105 +16,145 @@ function parseDateParam(value) {
   return date;
 }
 
-function formatSensorRef(sensorRef) {
-  if (!sensorRef) return null;
-  if (typeof sensorRef === "object" && sensorRef.name) {
-    return {
-      id: sensorRef._id,
-      name: sensorRef.name,
-      devEui: sensorRef.devEui,
-    };
+function getStepMs(interval) {
+  if (interval === "minute") return BUCKET_MS;
+  if (interval === "day") return DAY_MS;
+  return HOUR_MS;
+}
+
+function generateSlots(from, to, interval) {
+  const slots = [];
+  const stepMs = getStepMs(interval);
+  let current = Math.floor(new Date(from).getTime() / stepMs) * stepMs;
+  const end = new Date(to).getTime();
+
+  while (current <= end) {
+    slots.push(current);
+    current += stepMs;
   }
-  return null;
+
+  return slots;
 }
 
-function formatReading(reading) {
-  const obj = reading.toObject ? reading.toObject() : reading;
-  return {
-    id: obj._id,
-    sensor: formatSensorRef(obj.sensorId),
-    timestamp: obj.timestamp,
-    totalIn: obj.totalIn,
-    totalOut: obj.totalOut,
-    periodIn: obj.periodIn,
-    periodOut: obj.periodOut,
-    occupancy: obj.occupancy,
-  };
-}
-
-function buildReadingFilter({ sensorId, roomId, from, to }) {
-  const filter = {};
-  if (sensorId) filter.sensorId = sensorId;
-  if (roomId) filter.roomId = roomId;
-  if (from || to) {
-    filter.timestamp = {};
-    if (from) filter.timestamp.$gte = parseDateParam(from);
-    if (to) filter.timestamp.$lte = parseDateParam(to);
+function buildDateTruncExpression(interval) {
+  if (interval === "day") {
+    return { $dateTrunc: { date: "$timestamp", unit: "day" } };
   }
-  return filter;
+  if (interval === "minute") {
+    return { $dateTrunc: { date: "$timestamp", unit: "minute", binSize: 5 } };
+  }
+  return { $dateTrunc: { date: "$timestamp", unit: "hour" } };
 }
 
-async function fetchLatestReadingsBefore(field, ids, fromDate, existingIds = new Set()) {
-  const beforeReadings = await Promise.all(
-    ids.map((id) =>
-      Reading.findOne({ [field]: id, timestamp: { $lt: fromDate } }).sort({ timestamp: -1 }).lean()
-    )
+function slotsToSeries(from, to, interval, valueBySlot) {
+  return generateSlots(from, to, interval).map((slotStartMs) => ({
+    timestamp: new Date(slotStartMs).toISOString(),
+    value: valueBySlot.get(slotStartMs) ?? null,
+  }));
+}
+
+function rowsToSlotMap(rows) {
+  const valueBySlot = new Map();
+  for (const row of rows) {
+    const value = row.total ?? row.value;
+    if (row._id != null && value != null) {
+      valueBySlot.set(row._id.getTime(), Math.round(value));
+    }
+  }
+  return valueBySlot;
+}
+
+/**
+ * Aktuální obsazenost po senzorech — jediný zdroj pravdy pro souhrny a poslední bod live grafu patra.
+ *
+ * Pipeline v grafu ptá: „kdo poslal uplink v tomto konkrétním 5min slotu?“
+ * Tato funkce ptá: „jaká je nejnovější hodnota senzoru za posledních FRESH_READING_MS?“
+ * To jsou dvě různé otázky — senzor může mít čerstvý odečet z předchozího slotu a pipeline
+ * by ho v posledním bucketu nezapočítala, ale tady ano.
+ *
+ * Senzor bez čerstvého odečtu v mapě chybí → volající ho bere jako 0.
+ * Použití: karta „Osob v budově“, obsazenost místností (room.service), poslední bod live grafu patra.
+ */
+async function getFreshOccupancyBySensor(sensorIds, asOf = new Date()) {
+  if (!sensorIds.length) return new Map();
+
+  const objectIds = sensorIds.map((id) => new mongoose.Types.ObjectId(id));
+  const staleBefore = new Date(asOf.getTime() - FRESH_READING_MS);
+  const rows = await Reading.aggregate([
+    { $match: { sensorId: { $in: objectIds }, timestamp: { $gte: staleBefore } } },
+    { $sort: { sensorId: 1, timestamp: -1 } },
+    { $group: { _id: "$sensorId", occupancy: { $first: "$occupancy" } } },
+  ]);
+
+  return new Map(
+    rows.map((row) => [String(row._id), Math.round(row.occupancy ?? 0)])
   );
-
-  return beforeReadings.filter((reading) => reading && !existingIds.has(reading._id.toString()));
 }
 
-async function fetchAggregateBaseReadings({ sensorId, roomId, fromDate, toDate }) {
-  const filter = buildReadingFilter({
-    sensorId,
-    roomId,
-    from: fromDate.toISOString(),
-    to: toDate.toISOString(),
-  });
+async function aggregateOccupancySeries({ roomId, sensorIds, fromDate, toDate, interval }) {
+  const isFloor = !roomId;
 
-  return Reading.find(filter).sort({ timestamp: 1 }).lean();
-}
+  if (isFloor && !sensorIds.length) {
+    return slotsToSeries(fromDate, toDate, interval, new Map());
+  }
 
-async function addLastKnownReadings(readings, field, ids, fromDate) {
-  const existingIds = new Set(readings.map((reading) => reading._id.toString()));
-  const carryForward = await fetchLatestReadingsBefore(field, ids, fromDate, existingIds);
-  return [...carryForward, ...readings];
-}
+  const slotExpr = buildDateTruncExpression(interval);
+  const valueOp = interval === "minute" ? { $last: "$occupancy" } : { $avg: "$occupancy" };
 
-async function fetchReadings(query) {
-  const { sensorId, roomId, from, to } = query;
-  const filter = buildReadingFilter({ sensorId, roomId, from, to });
-  const limit = Math.min(parseInt(query.limit, 10) || 100, 1000);
+  const match = isFloor
+    ? {
+        sensorId: { $in: sensorIds.map((id) => new mongoose.Types.ObjectId(id)) },
+        timestamp: { $gte: fromDate, $lte: toDate },
+      }
+    : {
+        roomId: new mongoose.Types.ObjectId(roomId),
+        timestamp: { $gte: fromDate, $lte: toDate },
+      };
 
-  const readings = await Reading.find(filter)
-    .sort({ timestamp: -1 })
-    .limit(limit)
-    .populate("sensorId", "name devEui");
+  const pipeline = [{ $match: match }];
 
-  return readings.map(formatReading);
-}
+  if (interval === "minute") {
+    pipeline.push({ $sort: { timestamp: 1 } });
+  }
 
-async function fetchRoomReadings(roomId, query) {
-  const room = await Room.findById(roomId).populate("sensorId", "name devEui");
-  if (!room) return null;
+  if (isFloor) {
+    pipeline.push(
+      {
+        $group: {
+          _id: { sensorId: "$sensorId", slot: slotExpr },
+          value: valueOp,
+        },
+      },
+      {
+        $group: {
+          _id: "$_id.slot",
+          total: { $sum: "$value" },
+        },
+      }
+    );
+  } else {
+    pipeline.push({ $group: { _id: slotExpr, value: valueOp } });
+  }
 
-  const readings = await fetchReadings({ ...query, roomId: room._id.toString() });
+  pipeline.push({ $sort: { _id: 1 } });
 
-  return {
-    room: {
-      id: room._id,
-      name: room.name,
-      capacity: room.capacity,
-      sensor: room.sensorId
-        ? {
-            id: room.sensorId._id,
-            name: room.sensorId.name,
-            devEui: room.sensorId.devEui,
-          }
-        : null,
-    },
-    readings,
-  };
+  const rows = await Reading.aggregate(pipeline);
+  const valueBySlot = rowsToSlotMap(rows);
+
+  // Live graf patra: pipeline pro každý slot sčítá jen senzory s uplinkem uvnitř daného 5min okna.
+  // U posledního slotu by tak chyběli senzoři s čerstvým odečtem z předchozího bucketu.
+  // Výsledek pipeline proto přepíšeme součtem z getFreshOccupancyBySensor (stejný jako „Osob v budově“).
+  // Starší sloty zůstávají z pipeline — ukazují historický průběh podle skutečných reportů v intervalu.
+  if (isFloor && interval === "minute") {
+    const slots = generateSlots(fromDate, toDate, "minute");
+    if (slots.length) {
+      const freshBySensor = await getFreshOccupancyBySensor(sensorIds, toDate);
+      const freshTotal = [...freshBySensor.values()].reduce((sum, value) => sum + value, 0);
+      valueBySlot.set(slots[slots.length - 1], freshTotal);
+    }
+  }
+
+  return slotsToSeries(fromDate, toDate, interval, valueBySlot);
 }
 
 async function aggregateReadings({ roomId, from, to, interval }) {
@@ -118,22 +163,16 @@ async function aggregateReadings({ roomId, from, to, interval }) {
   const resolvedInterval = interval || "hour";
 
   if (roomId) {
-    const readings = await fetchAggregateBaseReadings({ roomId, fromDate, toDate });
-    const readingsWithCarry = await addLastKnownReadings(readings, "roomId", [roomId], fromDate);
-
-    return aggregateRoomReadings(readingsWithCarry, fromDate, toDate, resolvedInterval);
+    return aggregateOccupancySeries({ roomId, fromDate, toDate, interval: resolvedInterval });
   }
 
-  const rooms = await Room.find().populate("sensorId");
-  const sensorIds = rooms.map((r) => r.sensorId?._id).filter(Boolean);
-  const readings = await fetchAggregateBaseReadings({ fromDate, toDate });
-  const readingsWithCarry = await addLastKnownReadings(readings, "sensorId", sensorIds, fromDate);
-
-  return aggregateFloorReadings(readingsWithCarry, sensorIds, fromDate, toDate, resolvedInterval);
+  const rooms = await Room.find().select("sensorId").lean();
+  const sensorIds = rooms.map((r) => r.sensorId).filter(Boolean);
+  return aggregateOccupancySeries({ sensorIds, fromDate, toDate, interval: resolvedInterval });
 }
 
 module.exports = {
-  fetchReadings,
-  fetchRoomReadings,
   aggregateReadings,
+  getFreshOccupancyBySensor,
+  FRESH_READING_MS,
 };

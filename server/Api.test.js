@@ -193,11 +193,6 @@ async function testRooms() {
     assert('PATCH /api/rooms/:id — přiřazení senzoru', assign.status === 200, 200, assign.status);
   }
 
-  // Readings pro místnost
-  if (createdRoomId) {
-    const readings = await request('GET', `/api/rooms/${createdRoomId}/readings`, null, adminToken);
-    assert('GET /api/rooms/:id/readings — vrátí 200', readings.status === 200, 200, readings.status);
-  }
 }
 
 async function testReadingsCollect() {
