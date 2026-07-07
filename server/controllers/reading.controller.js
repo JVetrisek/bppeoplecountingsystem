@@ -4,7 +4,7 @@ const { fetchReadings, aggregateReadings } = require("../services/reading.servic
 const { handleControllerError } = require("../services/error.service");
 
 router.get("/aggregate", async (req, res) => {
-  const { sensorId, roomId, from, to, interval } = req.query;
+  const { roomId, from, to, interval } = req.query;
 
   if (interval && interval !== "minute" && interval !== "hour" && interval !== "day") {
     return res.status(400).json({ error: "Parametr interval musí být 'minute', 'hour' nebo 'day'" });
@@ -12,7 +12,6 @@ router.get("/aggregate", async (req, res) => {
 
   try {
     const result = await aggregateReadings({
-      sensorId,
       roomId,
       from,
       to,

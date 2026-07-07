@@ -112,21 +112,14 @@ async function fetchRoomReadings(roomId, query) {
   };
 }
 
-async function aggregateReadings({ sensorId, roomId, from, to, interval }) {
+async function aggregateReadings({ roomId, from, to, interval }) {
   const toDate = to ? parseDateParam(to) : new Date();
   const fromDate = from ? parseDateParam(from) : new Date(toDate.getTime() - 12 * 60 * 60 * 1000);
   const resolvedInterval = interval || "hour";
 
-  if (roomId || sensorId) {
-    const readings = await fetchAggregateBaseReadings({ sensorId, roomId, fromDate, toDate });
-    const readingsWithCarry = (roomId || sensorId)
-      ? await addLastKnownReadings(
-          readings,
-          roomId ? "roomId" : "sensorId",
-          [roomId || sensorId],
-          fromDate
-        )
-      : readings;
+  if (roomId) {
+    const readings = await fetchAggregateBaseReadings({ roomId, fromDate, toDate });
+    const readingsWithCarry = await addLastKnownReadings(readings, "roomId", [roomId], fromDate);
 
     return aggregateRoomReadings(readingsWithCarry, fromDate, toDate, resolvedInterval);
   }
