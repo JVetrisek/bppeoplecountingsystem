@@ -1,5 +1,3 @@
-import { parseSlotKeyToDate } from '../../utils/chartSlots';
-
 export default function OccupancyTooltip({ active, payload, formatLabel }) {
   if (!active || !payload?.length) return null;
 
@@ -12,14 +10,4 @@ export default function OccupancyTooltip({ active, payload, formatLabel }) {
       <div className="font-semibold mt-0.5">Obsazenost: {point.value}</div>
     </div>
   );
-}
-
-export function toChartPoints(data, isRoom) {
-  return data
-    .filter((d) => (isRoom ? d.occupancy : d.avgOccupancy) != null)
-    .map((d) => ({
-      timestamp: parseSlotKeyToDate(d.timestamp).getTime(),
-      value: isRoom ? d.occupancy : d.avgOccupancy,
-      slotKey: d.timestamp,
-    }));
 }

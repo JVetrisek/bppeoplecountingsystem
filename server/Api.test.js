@@ -241,6 +241,22 @@ async function testReadingsAggregate() {
   // Se tokenem
   const withToken = await request('GET', '/api/readings/aggregate?interval=hour', null, adminToken);
   assert('GET /api/readings/aggregate — se tokenem vrátí 200', withToken.status === 200, 200, withToken.status);
+  assert('GET /api/readings/aggregate — vrátí pole bodů', Array.isArray(withToken.data), 'array', typeof withToken.data);
+
+  const minute = await request('GET', '/api/readings/aggregate?interval=minute', null, adminToken);
+  assert('GET /api/readings/aggregate?interval=minute — vrátí 200', minute.status === 200, 200, minute.status);
+
+  const rooms = await request('GET', '/api/rooms', null, adminToken);
+  const firstRoomId = rooms.data?.[0]?.id;
+  if (firstRoomId) {
+    const byRoom = await request(
+      'GET',
+      `/api/readings/aggregate?interval=hour&roomId=${firstRoomId}`,
+      null,
+      adminToken
+    );
+    assert('GET /api/readings/aggregate?roomId=... — vrátí 200', byRoom.status === 200, 200, byRoom.status);
+  }
 
   // Neplatný interval
   const badInterval = await request('GET', '/api/readings/aggregate?interval=tyden', null, adminToken);

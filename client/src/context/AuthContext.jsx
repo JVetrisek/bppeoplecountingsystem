@@ -18,15 +18,26 @@ function userFromToken(token) {
   };
 }
 
+function getInitialToken() {
+  const stored = localStorage.getItem(TOKEN_KEY);
+  if (!stored) return null;
+
+  try {
+    return userFromToken(stored) ? stored : null;
+  } catch {
+    localStorage.removeItem(TOKEN_KEY);
+    return null;
+  }
+}
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [token, setToken] = useState(() => getInitialToken());
+  const isLoading = false;
+  const user = token ? userFromToken(token) : null;
 
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
     setToken(null);
-    setUser(null);
   }, []);
 
   useEffect(() => {
@@ -34,31 +45,16 @@ export function AuthProvider({ children }) {
       logout();
       window.location.href = '/login';
     });
-  }, [logout]);
 
-  useEffect(() => {
-    const stored = localStorage.getItem(TOKEN_KEY);
-    if (stored) {
-      try {
-        const decodedUser = userFromToken(stored);
-        if (decodedUser) {
-          setToken(stored);
-          setUser(decodedUser);
-        } else {
-          localStorage.removeItem(TOKEN_KEY);
-        }
-      } catch {
-        localStorage.removeItem(TOKEN_KEY);
-      }
-    }
-    setIsLoading(false);
-  }, []);
+    return () => {
+      setUnauthorizedHandler(null);
+    };
+  }, [logout]);
 
   const login = async (email, password) => {
     const { data } = await api.post('/api/auth/login', { email, password });
     localStorage.setItem(TOKEN_KEY, data.token);
     setToken(data.token);
-    setUser(data.user);
     return data;
   };
 

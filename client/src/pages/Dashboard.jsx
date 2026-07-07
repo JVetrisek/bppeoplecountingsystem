@@ -1,34 +1,11 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { getRooms, getAggregate, getRoomReadings, getReadings } from '../api/api';
-import { aggregateLiveFloorReadings, getRoomSensorIds } from '../utils/liveFloorAggregation';
-import { fillTimeSlots, mergeAggregateSlots } from '../utils/chartSlots';
+import { getRooms } from '../api/api';
+import { fetchChartData, getRangeConfig } from '../utils/chartData';
 import StatsBar from '../components/StatsBar';
 import OccupancyChart from '../components/dashboard/OccupancyChart';
 import ChartModal from '../components/dashboard/ChartModal';
 import RoomList from '../components/dashboard/RoomList';
 import FloorMap from '../components/dashboard/FloorMap';
-
-function getRangeConfig(range) {
-  const now = new Date();
-
-  switch (range) {
-    case '12h':
-      return { hours: 12, interval: 'hour', from: new Date(now - 12 * 3600000), to: now };
-    case '24h':
-      return { hours: 24, interval: 'hour', from: new Date(now - 24 * 3600000), to: now };
-    case '7d':
-      return { hours: 7 * 24, interval: 'day', from: new Date(now - 7 * 24 * 3600000), to: now };
-    case '30d':
-      return { hours: 30 * 24, interval: 'day', from: new Date(now - 30 * 24 * 3600000), to: now };
-    default:
-      return { hours: 1, interval: 'hour', from: new Date(now - 3600000), to: now };
-  }
-}
-
-function buildChartParams(range) {
-  const { interval, from, to } = getRangeConfig(range);
-  return { from: from.toISOString(), to: to.toISOString(), interval };
-}
 
 export default function Dashboard() {
   const [rooms, setRooms] = useState([]);
@@ -37,11 +14,6 @@ export default function Dashboard() {
   const [chartRange, setChartRange] = useState('live');
   const [chartModalOpen, setChartModalOpen] = useState(false);
   const pollingRef = useRef(null);
-  const roomsRef = useRef(rooms);
-
-  useEffect(() => {
-    roomsRef.current = rooms;
-  }, [rooms]);
 
   const rangeConfig = getRangeConfig(chartRange);
 
@@ -54,43 +26,9 @@ export default function Dashboard() {
     }
   }, []);
 
-  const fetchChart = useCallback(async (roomId, range, roomsList) => {
-    const { interval, from, to } = getRangeConfig(range);
-
-    if (range === 'live') {
-      const params = {
-        from: from.toISOString(),
-        to: to.toISOString(),
-        limit: 1000,
-      };
-
-      if (roomId) {
-        const { data } = await getRoomReadings(roomId, params);
-        return [...data.readings].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-      }
-
-      if (!roomsList?.length) return [];
-
-      const { data } = await getReadings(params);
-      const sensorIds = getRoomSensorIds(roomsList);
-      return aggregateLiveFloorReadings(data, from, to, sensorIds, roomsList);
-    }
-
-    const params = buildChartParams(range);
-    let raw;
-    if (roomId) {
-      const { data } = await getRoomReadings(roomId, params);
-      raw = data.readings;
-    } else {
-      const { data } = await getAggregate(params);
-      raw = data;
-    }
-
-    if (!roomId) {
-      return mergeAggregateSlots(raw, from, to, interval);
-    }
-
-    return fillTimeSlots(raw, from, to, interval, true);
+  const fetchChart = useCallback(async (roomId, range) => {
+    const rangeConfig = getRangeConfig(range);
+    return fetchChartData(roomId, rangeConfig);
   }, []);
 
   useEffect(() => {
@@ -107,7 +45,7 @@ export default function Dashboard() {
     pollingRef.current = setInterval(() => {
       fetchRooms();
       if (chartRange === 'live') {
-        fetchChart(selectedId, chartRange, roomsRef.current)
+        fetchChart(selectedId, chartRange)
           .then((result) => {
             if (active) setChartData(result);
           })
@@ -124,11 +62,9 @@ export default function Dashboard() {
   }, [fetchRooms, fetchChart, selectedId, chartRange]);
 
   useEffect(() => {
-    if (chartRange === 'live' && !selectedId && rooms.length === 0) return undefined;
-
     let active = true;
 
-    fetchChart(selectedId, chartRange, roomsRef.current)
+    fetchChart(selectedId, chartRange)
       .then((result) => {
         if (active) setChartData(result);
       })
@@ -193,6 +129,7 @@ export default function Dashboard() {
       </div>
 
       <ChartModal
+        key={`${chartModalOpen ? 'open' : 'closed'}-${selectedId ?? 'floor'}-${chartRange}`}
         open={chartModalOpen}
         onClose={() => setChartModalOpen(false)}
         rooms={rooms}

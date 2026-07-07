@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { getSensors, getRooms, createSensor, updateSensor, deleteSensor } from '../api/api';
 import SensorTable from '../components/sensors/SensorTable';
 import SensorModal from '../components/sensors/SensorModal';
@@ -16,16 +16,9 @@ export default function Sensors() {
   const [deletingSensor, setDeletingSensor] = useState(null);
   const [saveError, setSaveError] = useState(null);
 
-  const stats = useMemo(() => {
-    const assigned = sensors.filter((s) => s.room).length;
-    const totalCapacity = rooms.reduce((sum, room) => sum + (room.capacity || 0), 0);
-
-    return {
-      registered: sensors.length,
-      totalCapacity,
-      assigned,
-    };
-  }, [sensors, rooms]);
+  const registered = sensors.length;
+  const assigned = sensors.filter((s) => s.room).length;
+  const totalCapacity = rooms.reduce((sum, room) => sum + (room.capacity || 0), 0);
 
   const getErrorField = (message) => {
     const lower = message.toLowerCase();
@@ -123,16 +116,16 @@ export default function Sensors() {
       <div className="grid grid-cols-3 gap-4">
         <div className="card bg-base-100 p-4">
           <div className="text-sm text-base-content/50">Registrované senzory</div>
-          <div className="text-3xl font-bold mt-1">{stats.registered}</div>
+          <div className="text-3xl font-bold mt-1">{registered}</div>
         </div>
         <div className="card bg-base-100 p-4">
           <div className="text-sm text-base-content/50">Celková kapacita</div>
-          <div className="text-3xl font-bold mt-1">{stats.totalCapacity}</div>
+          <div className="text-3xl font-bold mt-1">{totalCapacity}</div>
         </div>
         <div className="card bg-base-100 p-4">
           <div className="text-sm text-base-content/50">Přiřazeno k místnostem</div>
           <div className="text-3xl font-bold mt-1">
-            {stats.assigned} / {stats.registered}
+            {assigned} / {registered}
           </div>
         </div>
       </div>
@@ -155,6 +148,7 @@ export default function Sensors() {
 
       {modalOpen && (
         <SensorModal
+          key={editingSensor?.id ?? 'new'}
           sensor={editingSensor}
           onSave={handleSave}
           error={saveError}

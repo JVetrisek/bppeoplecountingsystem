@@ -2,18 +2,18 @@ const express = require("express");
 const router = express.Router();
 const { fetchReadings, aggregateReadings } = require("../services/reading.service");
 const { handleControllerError } = require("../services/error.service");
-const { authenticate } = require("../middleware/auth.middleware");
 
-router.get("/aggregate", authenticate, async (req, res) => {
-  const { sensorId, from, to, interval } = req.query;
+router.get("/aggregate", async (req, res) => {
+  const { sensorId, roomId, from, to, interval } = req.query;
 
-  if (interval && interval !== "hour" && interval !== "day") {
-    return res.status(400).json({ error: "Parametr interval musí být 'hour' nebo 'day'" });
+  if (interval && interval !== "minute" && interval !== "hour" && interval !== "day") {
+    return res.status(400).json({ error: "Parametr interval musí být 'minute', 'hour' nebo 'day'" });
   }
 
   try {
     const result = await aggregateReadings({
       sensorId,
+      roomId,
       from,
       to,
       interval: interval || "hour",

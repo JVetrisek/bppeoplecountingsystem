@@ -1,14 +1,31 @@
 const express = require("express");
 const router = express.Router();
 const Sensor = require("../models/Sensor");
+const Room = require("../models/Room");
 const { formatSensor, formatSensors } = require("../services/sensor.service");
 const { handleControllerError } = require("../services/error.service");
 const { requireAdmin } = require("../middleware/auth.middleware");
 
+async function buildRoomMap(sensorIds) {
+  if (!sensorIds.length) return new Map();
+
+  const rooms = await Room.find({ sensorId: { $in: sensorIds } }).select("name sensorId").lean();
+  return new Map(
+    rooms.map((room) => [
+      String(room.sensorId),
+      {
+        id: room._id,
+        name: room.name,
+      },
+    ])
+  );
+}
+
 router.get("/", async (req, res) => {
   try {
     const sensors = await Sensor.find();
-    res.json(await formatSensors(sensors));
+    const roomMap = await buildRoomMap(sensors.map((sensor) => sensor._id));
+    res.json(await formatSensors(sensors, roomMap));
   } catch (err) {
     handleControllerError(res, err);
   }
@@ -18,7 +35,8 @@ router.get("/:id", async (req, res) => {
   try {
     const sensor = await Sensor.findById(req.params.id);
     if (!sensor) return res.status(404).json({ error: "Senzor nenalezen" });
-    res.json(await formatSensor(sensor));
+    const roomMap = await buildRoomMap([sensor._id]);
+    res.json(await formatSensor(sensor, roomMap));
   } catch (err) {
     handleControllerError(res, err);
   }
@@ -35,7 +53,7 @@ router.post("/", requireAdmin, async (req, res) => {
   try {
     const sensor = new Sensor({ name, devEui });
     await sensor.save();
-    res.status(201).json(await formatSensor(sensor));
+    res.status(201).json(formatSensor(sensor));
   } catch (err) {
     if (err.code === 11000) {
       const field = err.keyPattern?.devEui ? "DevEUI" : Object.keys(err.keyPattern || {})[0] || "pole";
@@ -63,7 +81,8 @@ router.patch("/:id", requireAdmin, async (req, res) => {
   try {
     const sensor = await Sensor.findByIdAndUpdate(req.params.id, updates, { new: true });
     if (!sensor) return res.status(404).json({ error: "Senzor nenalezen" });
-    res.json(await formatSensor(sensor));
+    const roomMap = await buildRoomMap([sensor._id]);
+    res.json(await formatSensor(sensor, roomMap));
   } catch (err) {
     if (err.code === 11000) {
       const field = err.keyPattern?.devEui ? "DevEUI" : Object.keys(err.keyPattern || {})[0] || "pole";
@@ -78,7 +97,8 @@ router.delete("/:id", requireAdmin, async (req, res) => {
     const sensor = await Sensor.findById(req.params.id);
     if (!sensor) return res.status(404).json({ error: "Senzor nenalezen" });
 
-    if (sensor.roomId) {
+    const room = await Room.findOne({ sensorId: sensor._id }).select("_id");
+    if (room) {
       return res.status(409).json({ error: "Senzor je přiřazen k místnosti. Nejdříve ho odpoj." });
     }
 

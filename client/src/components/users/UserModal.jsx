@@ -1,35 +1,26 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Icon from '../Icon';
 import { createUser, updateUser } from '../../api/users.api';
 import { useToast } from '../../context/ToastContext';
 
+function initialDraft(user) {
+  return {
+    name: user?.name ?? '',
+    email: user?.email ?? '',
+    password: '',
+    role: user?.role ?? 'viewer',
+  };
+}
+
 export default function UserModal({ user, onClose, onSaved }) {
   const { addToast } = useToast();
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [role, setRole] = useState('viewer');
+  const [draft, setDraft] = useState(() => initialDraft(user));
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
 
-  useEffect(() => {
-    if (user) {
-      setName(user.name);
-      setEmail(user.email);
-      setRole(user.role);
-      setPassword('');
-    } else {
-      setName('');
-      setEmail('');
-      setPassword('');
-      setRole('viewer');
-    }
-    setError(null);
-  }, [user]);
-
   const handleSubmit = async () => {
-    if (!name.trim() || !email.trim()) return;
-    if (!user && !password.trim()) {
+    if (!draft.name.trim() || !draft.email.trim()) return;
+    if (!user && !draft.password.trim()) {
       setError('Heslo je povinné');
       return;
     }
@@ -39,19 +30,19 @@ export default function UserModal({ user, onClose, onSaved }) {
 
     try {
       const payload = {
-        name: name.trim(),
-        email: email.trim(),
-        role,
+        name: draft.name.trim(),
+        email: draft.email.trim(),
+        role: draft.role,
       };
-      if (password.trim()) {
-        payload.password = password;
+      if (draft.password.trim()) {
+        payload.password = draft.password;
       }
 
       if (user) {
         await updateUser(user.id, payload);
         addToast('Uživatel uložen', 'success');
       } else {
-        await createUser({ ...payload, password: password.trim() });
+        await createUser({ ...payload, password: draft.password.trim() });
         addToast('Uživatel vytvořen', 'success');
       }
 
@@ -84,8 +75,8 @@ export default function UserModal({ user, onClose, onSaved }) {
             <label className="label"><span className="label-text">Jméno</span></label>
             <input
               className="input input-bordered w-full"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              value={draft.name}
+              onChange={(e) => setDraft((prev) => ({ ...prev, name: e.target.value }))}
               placeholder="Jméno uživatele"
             />
           </div>
@@ -95,8 +86,8 @@ export default function UserModal({ user, onClose, onSaved }) {
             <input
               type="email"
               className="input input-bordered w-full"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={draft.email}
+              onChange={(e) => setDraft((prev) => ({ ...prev, email: e.target.value }))}
               placeholder="email@example.com"
             />
           </div>
@@ -109,8 +100,8 @@ export default function UserModal({ user, onClose, onSaved }) {
             <input
               type="password"
               className="input input-bordered w-full"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              value={draft.password}
+              onChange={(e) => setDraft((prev) => ({ ...prev, password: e.target.value }))}
               placeholder={user ? 'Ponechte prázdné pro zachování' : 'Heslo'}
             />
           </div>
@@ -119,8 +110,8 @@ export default function UserModal({ user, onClose, onSaved }) {
             <label className="label"><span className="label-text">Role</span></label>
             <select
               className="select select-bordered w-full"
-              value={role}
-              onChange={(e) => setRole(e.target.value)}
+              value={draft.role}
+              onChange={(e) => setDraft((prev) => ({ ...prev, role: e.target.value }))}
             >
               <option value="viewer">Viewer</option>
               <option value="admin">Administrátor</option>

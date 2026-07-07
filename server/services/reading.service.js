@@ -1,7 +1,7 @@
 const Reading = require("../models/Reading");
-const Room = require("../models/room");
+const Room = require("../models/Room");
 const { badRequest } = require("./error.service");
-const { aggregateFloorReadings } = require("../utils/floorAggregation");
+const { aggregateFloorReadings, aggregateRoomReadings } = require("../utils/floorAggregation");
 
 function parseDateParam(value) {
   const date = new Date(value);
@@ -49,23 +49,35 @@ function buildReadingFilter({ sensorId, roomId, from, to }) {
   return filter;
 }
 
-async function fetchCarryForwardReadings(fromDate, existingIds) {
-  const rooms = await Room.find().populate("sensorId");
-  const sensorIds = rooms.map((r) => r.sensorId?._id).filter(Boolean);
-
+async function fetchLatestReadingsBefore(field, ids, fromDate, existingIds = new Set()) {
   const beforeReadings = await Promise.all(
-    sensorIds.map((sensorId) =>
-      Reading.findOne({ sensorId, timestamp: { $lt: fromDate } })
-        .sort({ timestamp: -1 })
-        .populate("sensorId", "name devEui")
+    ids.map((id) =>
+      Reading.findOne({ [field]: id, timestamp: { $lt: fromDate } }).sort({ timestamp: -1 }).lean()
     )
   );
 
-  return beforeReadings.filter((r) => r && !existingIds.has(r._id.toString()));
+  return beforeReadings.filter((reading) => reading && !existingIds.has(reading._id.toString()));
+}
+
+async function fetchAggregateBaseReadings({ sensorId, roomId, fromDate, toDate }) {
+  const filter = buildReadingFilter({
+    sensorId,
+    roomId,
+    from: fromDate.toISOString(),
+    to: toDate.toISOString(),
+  });
+
+  return Reading.find(filter).sort({ timestamp: 1 }).lean();
+}
+
+async function addLastKnownReadings(readings, field, ids, fromDate) {
+  const existingIds = new Set(readings.map((reading) => reading._id.toString()));
+  const carryForward = await fetchLatestReadingsBefore(field, ids, fromDate, existingIds);
+  return [...carryForward, ...readings];
 }
 
 async function fetchReadings(query) {
-  const { sensorId, roomId, from, to, carryForward } = query;
+  const { sensorId, roomId, from, to } = query;
   const filter = buildReadingFilter({ sensorId, roomId, from, to });
   const limit = Math.min(parseInt(query.limit, 10) || 100, 1000);
 
@@ -73,13 +85,6 @@ async function fetchReadings(query) {
     .sort({ timestamp: -1 })
     .limit(limit)
     .populate("sensorId", "name devEui");
-
-  if (carryForward === "true" && from && !sensorId && !roomId) {
-    const fromDate = parseDateParam(from);
-    const existingIds = new Set(readings.map((r) => r._id.toString()));
-    const extra = await fetchCarryForwardReadings(fromDate, existingIds);
-    readings.push(...extra);
-  }
 
   return readings.map(formatReading);
 }
@@ -107,40 +112,35 @@ async function fetchRoomReadings(roomId, query) {
   };
 }
 
-async function aggregateReadings({ sensorId, from, to, interval }) {
+async function aggregateReadings({ sensorId, roomId, from, to, interval }) {
   const toDate = to ? parseDateParam(to) : new Date();
   const fromDate = from ? parseDateParam(from) : new Date(toDate.getTime() - 12 * 60 * 60 * 1000);
+  const resolvedInterval = interval || "hour";
 
-  const rooms = await Room.find().populate("sensorId");
-  const sensorIds = sensorId
-    ? [sensorId]
-    : rooms.map((r) => r.sensorId?._id).filter(Boolean);
+  if (roomId || sensorId) {
+    const readings = await fetchAggregateBaseReadings({ sensorId, roomId, fromDate, toDate });
+    const readingsWithCarry = (roomId || sensorId)
+      ? await addLastKnownReadings(
+          readings,
+          roomId ? "roomId" : "sensorId",
+          [roomId || sensorId],
+          fromDate
+        )
+      : readings;
 
-  const HALF_HOUR_MS = 30 * 60 * 1000;
-  const DAY_MS = 24 * 60 * 60 * 1000;
-
-  let queryFrom = new Date(fromDate);
-  let queryTo = new Date(toDate);
-
-  if (interval === "day") {
-    queryFrom = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate(), 0, 0, 0, 0);
-    const endDay = new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate(), 0, 0, 0, 0);
-    queryTo = new Date(endDay.getTime() + DAY_MS - 1);
-  } else {
-    queryFrom = new Date(fromDate.getTime() - HALF_HOUR_MS);
-    queryTo = new Date(toDate.getTime() + HALF_HOUR_MS);
+    return aggregateRoomReadings(readingsWithCarry, fromDate, toDate, resolvedInterval);
   }
 
-  const filter = buildReadingFilter({ sensorId, from: queryFrom.toISOString(), to: queryTo.toISOString() });
-  const readings = await Reading.find(filter).sort({ timestamp: 1 }).lean();
+  const rooms = await Room.find().populate("sensorId");
+  const sensorIds = rooms.map((r) => r.sensorId?._id).filter(Boolean);
+  const readings = await fetchAggregateBaseReadings({ fromDate, toDate });
+  const readingsWithCarry = await addLastKnownReadings(readings, "sensorId", sensorIds, fromDate);
 
-  return aggregateFloorReadings(readings, sensorIds, fromDate, toDate, interval || "hour");
+  return aggregateFloorReadings(readingsWithCarry, sensorIds, fromDate, toDate, resolvedInterval);
 }
 
 module.exports = {
-  buildReadingFilter,
   fetchReadings,
   fetchRoomReadings,
   aggregateReadings,
-  formatReading,
 };

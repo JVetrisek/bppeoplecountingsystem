@@ -3,14 +3,14 @@
  * Spuštění: node scripts/seedData.js
  *
  * Idempotentní — existující záznamy (podle email / devEui / názvu místnosti) přeskočí,
- * chybějící doplní a propojí sensorId ↔ roomId.
+ * chybějící doplní a propojí rooms.sensorId.
  */
 
 require("dotenv").config();
 const mongoose = require("mongoose");
 const User = require("../models/Users");
 const Sensor = require("../models/Sensor");
-const Room = require("../models/room");
+const Room = require("../models/Room");
 
 const USERS = [
   {
@@ -96,12 +96,10 @@ async function seedSensors() {
       sensor = await Sensor.create({
         name: data.name,
         devEui: data.devEui,
-        isActive: true,
       });
       console.log(`✅ Senzor: ${data.name} (${data.devEui})`);
     } else {
       sensor.name = data.name;
-      sensor.isActive = true;
       await sensor.save();
       console.log(`⏭️  Senzor ${data.devEui} — aktualizován název`);
     }
@@ -136,10 +134,6 @@ async function seedRooms(sensorMap) {
       await room.save();
       console.log(`⏭️  Místnost ${data.name} — aktualizována`);
     }
-
-    sensor.roomId = room._id;
-    await sensor.save();
-
     roomMap.set(data.name, room);
   }
 

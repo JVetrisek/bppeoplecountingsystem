@@ -499,39 +499,31 @@ Poslední odečet. Aktuální obsazenost frontend bere z `GET /api/rooms`.
 
 ### `GET /api/readings/aggregate`
 
-Agregovaná data pro grafy (celé podlaží nebo filtr podle senzoru).
+Agregovaná data pro grafy. Umí vrátit časovou řadu pro celé podlaží, konkrétní místnost nebo konkrétní senzor.
 
 **Použití frontend:** Dashboard (graf obsazenosti celého podlaží).
 
 **DTO in** (query):
 ```
 ?from=2026-06-01&to=2026-06-07&interval=hour
-?sensorId=665a1b2c3d4e5f6a7b8c9d0e&from=2026-06-01&to=2026-06-07&interval=day
+?roomId=665a1b2c3d4e5f6a7b8c9d0f&from=2026-06-01&to=2026-06-07&interval=day
+?sensorId=665a1b2c3d4e5f6a7b8c9d0e&from=2026-06-01&to=2026-06-07&interval=minute
 ```
-`interval`: `hour` (výchozí) nebo `day`
+`interval`: `minute`, `hour` (výchozí) nebo `day`
 
 **DTO out** `200`:
 ```json
 [
   {
     "timestamp": "2026-06-07T10:00:00.000Z",
-    "avgOccupancy": 28,
-    "rooms": [
-      {
-        "roomId": "665a1b2c3d4e5f6a7b8c9d0f",
-        "roomName": "Učebna 101",
-        "avgOccupancy": 12,
-        "maxOccupancy": 15,
-        "minOccupancy": 8
-      }
-    ]
+    "value": 28
   }
 ]
 ```
 
 **DTO out** `400`:
 ```json
-{ "error": "Parametr interval musí být 'hour' nebo 'day'" }
+{ "error": "Parametr interval musí být 'minute', 'hour' nebo 'day'" }
 ```
 
 ---

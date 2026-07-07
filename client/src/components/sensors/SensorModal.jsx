@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import Icon from '../Icon';
 
 function getFieldError(message, field) {
@@ -11,19 +11,9 @@ function getFieldError(message, field) {
 }
 
 export default function SensorModal({ sensor, onSave, onClose, error, onClearError }) {
-  const [name, setName] = useState('');
-  const [devEui, setDevEui] = useState('');
+  const [name, setName] = useState(() => sensor?.name ?? '');
+  const [devEui, setDevEui] = useState(() => sensor?.devEui ?? '');
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    if (sensor) {
-      setName(sensor.name);
-      setDevEui(sensor.devEui);
-    } else {
-      setName('');
-      setDevEui('');
-    }
-  }, [sensor]);
 
   const handleSubmit = async () => {
     if (!name.trim() || !devEui.trim()) return;

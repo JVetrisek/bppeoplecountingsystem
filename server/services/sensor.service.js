@@ -1,31 +1,18 @@
-const Room = require("../models/room");
-
-async function formatSensor(sensor) {
+function formatSensor(sensor, roomMap = new Map()) {
   const obj = sensor.toObject ? sensor.toObject() : sensor;
-
-  let room = null;
-  if (obj.roomId) {
-    const roomDoc =
-      typeof obj.roomId === "object" && obj.roomId.name
-        ? obj.roomId
-        : await Room.findById(obj.roomId).select("name");
-    if (roomDoc) {
-      room = { id: roomDoc._id, name: roomDoc.name };
-    }
-  }
+  const room = roomMap.get(String(obj._id)) ?? null;
 
   return {
     id: obj._id,
     name: obj.name,
     devEui: obj.devEui,
     lastSeenAt: obj.lastSeenAt,
-    isActive: obj.isActive,
     room,
   };
 }
 
-async function formatSensors(sensors) {
-  return Promise.all(sensors.map(formatSensor));
+async function formatSensors(sensors, roomMap) {
+  return sensors.map((sensor) => formatSensor(sensor, roomMap));
 }
 
 module.exports = { formatSensor, formatSensors };

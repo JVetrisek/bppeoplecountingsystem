@@ -1,15 +1,12 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { getAggregate, getRoomReadings, getReadings } from '../../api/api';
-import { aggregateLiveFloorReadings, getRoomSensorIds } from '../../utils/liveFloorAggregation';
-import { fillTimeSlots, slotKey, mergeAggregateSlots } from '../../utils/chartSlots';
-import OccupancyTooltip, { toChartPoints } from './OccupancyTooltip';
+import OccupancyTooltip from './OccupancyTooltip';
 import ChartAggregationHelp from './ChartAggregationHelp';
 import Icon from '../Icon';
 import CallyDatePicker from '../CallyDatePicker';
 import TimePicker from '../TimePicker';
-import ChartEmptyState, { hasChartData } from './ChartEmptyState';
 import CapacityReferenceLine from './CapacityReferenceLine';
+import { fetchChartData, getCustomRangeConfig, getRangeConfig, hasChartData, toChartPoints } from '../../utils/chartData';
 
 const PRESET_RANGES = ['live', '12h', '24h', '7d', '30d'];
 
@@ -23,60 +20,8 @@ const RANGE_LABELS = {
 
 const DAY_NAMES = ['Ne', 'Po', 'Út', 'St', 'Čt', 'Pá', 'So'];
 
-function getRangeConfig(range) {
-  const now = new Date();
-
-  switch (range) {
-    case '12h':
-      return { hours: 12, interval: 'hour', from: new Date(now - 12 * 3600000), to: now };
-    case '24h':
-      return { hours: 24, interval: 'hour', from: new Date(now - 24 * 3600000), to: now };
-    case '7d':
-      return { hours: 7 * 24, interval: 'day', from: new Date(now - 7 * 24 * 3600000), to: now };
-    case '30d':
-      return { hours: 30 * 24, interval: 'day', from: new Date(now - 30 * 24 * 3600000), to: now };
-    default:
-      return { hours: 1, interval: 'hour', from: new Date(now - 3600000), to: now };
-  }
-}
-
-function getCustomRangeConfig(from, to) {
-  const hours = Math.max(0, (to - from) / 3600000);
-  let interval = 'day';
-  if (hours < 2) interval = 'minute';
-  else if (hours <= 48) interval = 'hour';
-  return { hours, interval, from, to };
-}
-
-function getModalPresetConfig(range) {
-  const config = getRangeConfig(range);
-  if (range === 'live') {
-    return { ...config, interval: 'minute' };
-  }
-  return config;
-}
-
-function aggregateRoomReadings(readings, interval) {
-  const map = new Map();
-
-  for (const reading of readings) {
-    const key = slotKey(reading.timestamp, interval);
-    if (!map.has(key)) map.set(key, []);
-    map.get(key).push(reading.occupancy);
-  }
-
-  return [...map.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .map(([timestamp, values]) => ({
-      timestamp,
-      occupancy: Math.round(values.reduce((sum, v) => sum + v, 0) / values.length),
-    }));
-}
-
-function computeStats(data, isRoom) {
-  const values = data
-    .map((d) => (isRoom ? d.occupancy : d.avgOccupancy))
-    .filter((v) => v != null);
+function computeStats(data) {
+  const values = data.map((d) => d.value).filter((v) => v != null);
 
   if (!values.length) {
     return { avg: null, max: null, min: null };
@@ -87,36 +32,6 @@ function computeStats(data, isRoom) {
     max: Math.max(...values),
     min: Math.min(...values),
   };
-}
-
-async function fetchChartData(roomId, rangeConfig, rooms) {
-  const { from, to, interval } = rangeConfig;
-  const params = {
-    from: from.toISOString(),
-    to: to.toISOString(),
-    limit: 1000,
-  };
-
-  if (interval === 'minute') {
-    if (roomId) {
-      const { data } = await getRoomReadings(roomId, params);
-      return [...data.readings].sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp));
-    }
-    if (!rooms?.length) return [];
-
-    const { data } = await getReadings(params);
-    const sensorIds = getRoomSensorIds(rooms);
-    return aggregateLiveFloorReadings(data, from, to, sensorIds, rooms);
-  }
-
-  if (roomId) {
-    const { data } = await getRoomReadings(roomId, params);
-    const aggregated = aggregateRoomReadings(data.readings, interval);
-    return fillTimeSlots(aggregated, from, to, interval, true);
-  }
-
-  const { data } = await getAggregate({ ...params, interval });
-  return mergeAggregateSlots(data, from, to, interval);
 }
 
 function toDateValue(date) {
@@ -190,12 +105,6 @@ export default function ChartModal({
   const [selectedRoomId, setSelectedRoomId] = useState(roomId ?? null);
   const [customApplied, setCustomApplied] = useState(null);
   const [chartData, setChartData] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const roomsRef = useRef(rooms);
-
-  useEffect(() => {
-    roomsRef.current = rooms;
-  }, [rooms]);
 
   const selectedRoom = rooms.find((r) => r.id === selectedRoomId) || null;
   const floorCapacity = rooms.reduce((s, r) => s + (r.capacity ?? 0), 0);
@@ -207,7 +116,7 @@ export default function ChartModal({
     : '';
   const rangeConfig = isCustom
     ? getCustomRangeConfig(customApplied.from, customApplied.to)
-    : getModalPresetConfig(range);
+    : getRangeConfig(range);
 
   const [draftFromDate, setDraftFromDate] = useState(() => toDateValue(rangeConfig.from));
   const [draftFromTime, setDraftFromTime] = useState(() => toTimeValue(rangeConfig.from));
@@ -216,41 +125,28 @@ export default function ChartModal({
 
   const title = selectedRoom ? selectedRoom.name : 'Celé podlaží';
   const isRoom = !!selectedRoomId;
-  const stats = computeStats(chartData, isRoom);
-  const hasData = hasChartData(chartData, isRoom);
+  const stats = computeStats(chartData);
+  const hasData = hasChartData(chartData);
 
-  const chartPoints = toChartPoints(chartData, isRoom);
+  const chartPoints = toChartPoints(chartData);
   const maxValue = chartPoints.reduce((max, d) => (d.value != null ? Math.max(max, d.value) : max), 0);
   const yMax = Math.max(totalCapacity || 0, maxValue || 0) * 1.1;
   const capacityExceeded = maxValue > totalCapacity;
 
   useEffect(() => {
-    if (!open) return;
-    setRange(initialRange);
-    setCustomApplied(null);
-    setSelectedRoomId(roomId ?? null);
-  }, [open, initialRange, roomId]);
-
-  useEffect(() => {
     if (!open) return undefined;
-    if (!selectedRoomId && roomsRef.current.length === 0) return undefined;
-
     let active = true;
-    setLoading(true);
 
     const config = customRangeKey
       ? getCustomRangeConfig(customApplied.from, customApplied.to)
-      : getModalPresetConfig(range);
+      : getRangeConfig(range);
 
-    fetchChartData(selectedRoomId, config, roomsRef.current)
+    fetchChartData(selectedRoomId, config)
       .then((result) => {
         if (active) setChartData(result);
       })
       .catch((err) => {
         if (active) console.error(err);
-      })
-      .finally(() => {
-        if (active) setLoading(false);
       });
 
     return () => {
@@ -261,7 +157,7 @@ export default function ChartModal({
   const handlePresetChange = (preset) => {
     setCustomApplied(null);
     setRange(preset);
-    const config = getModalPresetConfig(preset);
+    const config = getRangeConfig(preset);
     setDraftFromDate(toDateValue(config.from));
     setDraftFromTime(toTimeValue(config.from));
     setDraftToDate(toDateValue(config.to));
@@ -373,12 +269,13 @@ export default function ChartModal({
               iconClassName="size-[1.55rem]"
             />
           </div>
-          {loading ? (
-            <div className="h-full flex items-center justify-center">
-              <span className="loading loading-spinner loading-lg text-primary" />
+          {!hasData ? (
+            <div
+              className="flex items-center justify-center text-sm text-base-content/50 border border-dashed border-base-300 rounded-lg"
+              style={{ height: 300 }}
+            >
+              Žádná dostupná data
             </div>
-          ) : !hasData ? (
-            <ChartEmptyState height={300} />
           ) : (
             <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartPoints} margin={{ left: 0, right: 8 }}>

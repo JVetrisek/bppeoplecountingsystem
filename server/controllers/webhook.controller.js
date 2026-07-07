@@ -2,7 +2,7 @@ const express = require("express");
 const router = express.Router();
 const Sensor = require("../models/Sensor");
 const Reading = require("../models/Reading");
-const Room = require("../models/room");
+const Room = require("../models/Room");
 const { extractLineCounts } = require("../services/webhook.service");
 
 function verifyApiKey(req, res) {
@@ -37,12 +37,11 @@ router.post("/", async (req, res) => {
 
     const { totalIn, totalOut, periodIn, periodOut } = extractLineCounts(decoded);
     const occupancy = Math.max(0, totalIn - totalOut);
-
-    const room = await Room.findOne({ sensorId: sensor._id });
+    const room = await Room.findOne({ sensorId: sensor._id }).select("_id");
 
     const reading = new Reading({
       sensorId: sensor._id,
-      roomId: room?._id || null,
+      roomId: room?._id ?? null,
       timestamp: req.body.time ? new Date(req.body.time) : new Date(),
       totalIn,
       totalOut,

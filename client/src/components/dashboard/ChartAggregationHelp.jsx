@@ -10,22 +10,22 @@ function getAggregationHelpText({ isRoom, range, interval }) {
 
   if (mode === 'live') {
     if (isRoom) {
-      return 'Živý graf zobrazuje jednotlivá měření senzoru v pětiminutových intervalech.';
+      return 'Graf zobrazuje data za poslední hodinu pro konkrétní místnost.';
     }
-    return 'Každých 5 minut sečteme obsazenost všech místností. Poslední bod odpovídá aktuálnímu součtu osob v budově.';
+    return 'Graf zobrazuje data za poslední hodinu pro celé podlaží. Data jsou sečtena do jednotlivých pětiminutových bloků a ukazují celkovou obsazenost podlaží.';
   }
 
   if (mode === 'hour') {
     if (isRoom) {
-      return 'Pro každou hodinu (např. 14:00) zobrazujeme průměr měření senzoru v okně 13:30–14:30.';
+      return 'Zobrazujeme průměrnou obsazenost místnosti v jednotlivých hodinách.';
     }
-    return 'Pro každou hodinu (např. 14:00) vezmeme 12 pětiminutových bloků v okně 13:30–14:30. V každém bloku sečteme obsazenost všech místností a z těchto součtů vypočítáme průměr.';
+    return 'Zobrazujeme průměrnou obsazenost všech místností dohromady v jednotlivých hodinách.';
   }
 
   if (isRoom) {
-    return 'Pro každý den zobrazujeme průměr všech měření senzoru v daném dni.';
+    return 'Zobrazujeme průměrnou obsazenost místnosti v jednotlivých dnech.';
   }
-  return 'Pro každý den průměrujeme všechny pětiminutové bloky za celý den. V každém bloku sečteme obsazenost všech místností a z těchto hodnot vypočítáme denní průměr.';
+  return 'Zobrazujeme průměrnou obsazenost všech místností dohromady v jednotlivých dnech.';
 }
 
 export default function ChartAggregationHelp({ isRoom, range, interval, iconClassName = 'size-5' }) {

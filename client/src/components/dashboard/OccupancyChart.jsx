@@ -1,9 +1,9 @@
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import Icon from '../Icon';
-import ChartEmptyState, { hasChartData } from './ChartEmptyState';
 import CapacityReferenceLine from './CapacityReferenceLine';
-import OccupancyTooltip, { toChartPoints } from './OccupancyTooltip';
+import OccupancyTooltip from './OccupancyTooltip';
 import ChartAggregationHelp from './ChartAggregationHelp';
+import { hasChartData, toChartPoints } from '../../utils/chartData';
 
 const RANGES = ['live', '12h', '24h', '7d', '30d'];
 
@@ -89,8 +89,8 @@ export default function OccupancyChart({
   const subtitle = room ? null : `${roomCount ?? 0} sledovaných místností`;
   const xMax = to;
 
-  const chartData = toChartPoints(data, !!room);
-  const hasData = hasChartData(data, !!room);
+  const chartData = toChartPoints(data);
+  const hasData = hasChartData(data);
   const maxValue = chartData.reduce((max, d) => (d.value != null ? Math.max(max, d.value) : max), 0);
   const yMax = Math.max(totalCapacity || 0, maxValue || 0) * 1.1;
   const capacityExceeded = maxValue > totalCapacity;
@@ -161,7 +161,12 @@ export default function OccupancyChart({
         </AreaChart>
         </ResponsiveContainer>
       ) : (
-        <ChartEmptyState height={200} />
+        <div
+          className="flex items-center justify-center text-sm text-base-content/50 border border-dashed border-base-300 rounded-lg"
+          style={{ height: 200 }}
+        >
+          Žádná dostupná data
+        </div>
       )}
       </div>
 

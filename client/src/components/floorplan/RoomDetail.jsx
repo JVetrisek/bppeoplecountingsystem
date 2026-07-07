@@ -1,24 +1,20 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useRef } from 'react';
 import Icon from '../Icon';
 
+function initialDraft(room) {
+  return {
+    name: room?.name || '',
+    capacity: room?.capacity ?? '',
+    sensorId: room?.sensorId || '',
+  };
+}
+
 export default function RoomDetail({ room, sensors, onClose, onChange, onDelete }) {
-  const [name, setName] = useState('');
-  const [capacity, setCapacity] = useState('');
-  const [sensorId, setSensorId] = useState('');
+  const [draft, setDraft] = useState(() => initialDraft(room));
   const debounceRef = useRef(null);
 
-  useEffect(() => {
-    if (room) {
-      setName(room.name || '');
-      setCapacity(room.capacity ?? '');
-      setSensorId(room.sensorId || '');
-    }
-  }, [room]);
-
   const handleChange = (field, value) => {
-    if (field === 'name') setName(value);
-    if (field === 'capacity') setCapacity(value);
-    if (field === 'sensorId') setSensorId(value);
+    setDraft((prev) => ({ ...prev, [field]: value }));
 
     clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
@@ -41,7 +37,7 @@ export default function RoomDetail({ room, sensors, onClose, onChange, onDelete 
         <label className="label"><span className="label-text">Název</span></label>
         <input
           className="input input-bordered input-sm"
-          value={name}
+          value={draft.name}
           onChange={(e) => handleChange('name', e.target.value)}
         />
       </div>
@@ -52,7 +48,7 @@ export default function RoomDetail({ room, sensors, onClose, onChange, onDelete 
           className="input input-bordered input-sm"
           type="number"
           min={1}
-          value={capacity}
+          value={draft.capacity}
           onChange={(e) => handleChange('capacity', e.target.value)}
         />
       </div>
@@ -61,7 +57,7 @@ export default function RoomDetail({ room, sensors, onClose, onChange, onDelete 
         <label className="label"><span className="label-text">Senzor</span></label>
         <select
             className="select select-bordered select-sm"
-            value={sensorId}
+            value={draft.sensorId}
             onChange={(e) => handleChange('sensorId', e.target.value)}
             >
             <option value="">— bez senzoru —</option>

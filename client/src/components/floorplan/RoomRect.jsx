@@ -1,7 +1,7 @@
 const HANDLE_SIZE = 10;
 
 export default function RoomRect({ room, isSelected, onSelect, onDragStart, onResizeStart }) {
-  const { name, currentOccupancy, capacity } = room;
+  const { name, capacity } = room;
   const x = room.geometry?.x ?? 50;
   const y = room.geometry?.y ?? 50;
   const width = room.geometry?.width ?? 200;

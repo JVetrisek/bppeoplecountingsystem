@@ -1,8 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const Sensor = require("../models/Sensor");
-const Room = require("../models/room");
-const { formatRoomDetail, formatRoomListItem } = require("../services/room.service");
+const Room = require("../models/Room");
+const {
+  formatRoomDetail,
+  formatRoomListItemWithOccupancy,
+  getRoomsOccupancyMap,
+} = require("../services/room.service");
 const { fetchRoomReadings } = require("../services/reading.service");
 const { handleControllerError } = require("../services/error.service");
 const { requireAdmin } = require("../middleware/auth.middleware");
@@ -17,7 +21,8 @@ function parseCapacity(capacity) {
 router.get("/", async (req, res) => {
   try {
     const rooms = await Room.find().populate("sensorId", "name devEui lastSeenAt");
-    const roomsWithOccupancy = await Promise.all(rooms.map(formatRoomListItem));
+    const occupancyMap = await getRoomsOccupancyMap(rooms);
+    const roomsWithOccupancy = rooms.map((room) => formatRoomListItemWithOccupancy(room, occupancyMap));
     res.json(roomsWithOccupancy);
   } catch (err) {
     handleControllerError(res, err);
@@ -84,23 +89,20 @@ router.patch("/:id", requireAdmin, async (req, res) => {
 
     if ("sensorId" in req.body) {
       if (req.body.sensorId === null) {
-        if (room.sensorId) {
-          await Sensor.findByIdAndUpdate(room.sensorId, { roomId: null });
-        }
         updates.sensorId = null;
       } else {
         const sensor = await Sensor.findById(req.body.sensorId);
         if (!sensor) return res.status(404).json({ error: "Senzor nenalezen" });
 
-        if (sensor.roomId && sensor.roomId.toString() !== room._id.toString()) {
-          await Room.findByIdAndUpdate(sensor.roomId, { sensorId: null });
+        const previousRoom = await Room.findOne({
+          sensorId: sensor._id,
+          _id: { $ne: room._id },
+        }).select("_id");
+        if (previousRoom) {
+          await Room.findByIdAndUpdate(previousRoom._id, { sensorId: null });
         }
 
-        if (room.sensorId && room.sensorId.toString() !== req.body.sensorId) {
-          await Sensor.findByIdAndUpdate(room.sensorId, { roomId: null });
-        }
-
-        await Sensor.findByIdAndUpdate(req.body.sensorId, { roomId: room._id });
+        updates.sensorId = sensor._id;
       }
     }
 
@@ -118,10 +120,6 @@ router.delete("/:id", requireAdmin, async (req, res) => {
   try {
     const room = await Room.findById(req.params.id);
     if (!room) return res.status(404).json({ error: "Místnost nenalezena" });
-
-    if (room.sensorId) {
-      await Sensor.findByIdAndUpdate(room.sensorId, { roomId: null });
-    }
 
     await Room.findByIdAndDelete(req.params.id);
     res.json({ ok: true });

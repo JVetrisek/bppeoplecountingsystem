@@ -94,6 +94,7 @@ export default function Users() {
 
       {modalOpen && (
         <UserModal
+          key={editingUser?.id ?? 'new'}
           user={editingUser}
           onClose={() => {
             setModalOpen(false);

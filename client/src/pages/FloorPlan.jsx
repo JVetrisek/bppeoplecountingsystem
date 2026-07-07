@@ -27,21 +27,26 @@ export default function FloorPlan() {
     }
   };
 
-  const fetchSensors = async () => {
-    try {
-      const { data } = await getSensors();
-      setSensors(data);
-    } catch (err) {
-      console.error('Chyba při načítání senzorů:', err);
-    }
-  };
-
   useEffect(() => {
-    fetchRooms();
-    fetchSensors();
+    let active = true;
+
+    Promise.all([getRooms(), getSensors()])
+      .then(([roomsRes, sensorsRes]) => {
+        if (!active) return;
+        setRooms(roomsRes.data);
+        setSensors(sensorsRes.data);
+      })
+      .catch((err) => {
+        if (!active) return;
+        console.error('Chyba při načítání plánku:', err);
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const selectedRoom = rooms.find(r => r.id === selectedId) || null;
+  const selectedRoom = rooms.find((r) => r.id === selectedId) || null;
 
   const handleAddRoom = async (name) => {
     try {
@@ -122,11 +127,12 @@ export default function FloorPlan() {
       <div className="w-80 flex flex-col min-h-0 h-full overflow-hidden">
         {selectedRoom ? (
           <RoomDetail
+            key={selectedRoom.id}
             room={selectedRoom}
             sensors={sensors}
             onClose={() => setSelectedId(null)}
             onChange={handleRoomChange}
-            onDelete={(id) => setDeletingRoom(rooms.find(r => r.id === id))}
+            onDelete={(id) => setDeletingRoom(rooms.find((r) => r.id === id))}
           />
         ) : (
           <div className="card bg-base-100 p-4 h-full flex flex-col min-h-0">
