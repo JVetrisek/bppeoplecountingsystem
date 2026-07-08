@@ -17,20 +17,15 @@ function getHeatStroke(percent) {
 
 export default function FloorMap({ rooms, selectedId, onSelect }) {
   return (
-    <div className="card bg-base-100 p-4 flex-1 min-h-0 flex flex-col">
-      <div className="font-bold mb-3">Plánek prostoru</div>
+    <div className="card bg-base-100 p-3 lg:p-4 flex min-h-[260px] flex-col lg:min-h-0 lg:flex-1">
+      <div className="mb-3 font-bold">Plánek prostoru</div>
       <svg
         viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
         preserveAspectRatio="xMidYMin meet"
+        className="min-h-[220px] w-full flex-1 rounded-lg border border-base-300 bg-[#fafafa] lg:min-h-0"
         style={{
-          width: '100%',
-          flex: 1,
-          minHeight: 0,
           backgroundImage: 'radial-gradient(circle, #d1d5db 1px, transparent 1px)',
           backgroundSize: '20px 20px',
-          backgroundColor: '#fafafa',
-          border: '1px solid #e0e0e0',
-          borderRadius: '8px',
         }}
       >
         {rooms.map(room => {

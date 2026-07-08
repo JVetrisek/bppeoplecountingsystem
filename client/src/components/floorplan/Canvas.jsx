@@ -73,20 +73,15 @@ export default function Canvas({ rooms, selectedId, onSelect, onRoomChange }) {
   }, []);
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col">
+    <div className="flex min-h-[220px] flex-1 flex-col lg:min-h-0">
       <svg
         ref={svgRef}
         viewBox={`0 0 ${VIEWBOX_WIDTH} ${VIEWBOX_HEIGHT}`}
         preserveAspectRatio="xMidYMin meet"
+        className="min-h-[220px] w-full flex-1 rounded-lg border border-base-300 bg-[#fafafa] lg:min-h-0"
         style={{
-          width: '100%',
-          flex: 1,
-          minHeight: 0,
           backgroundImage: 'radial-gradient(circle, #d1d5db 1px, transparent 1px)',
           backgroundSize: '20px 20px',
-          backgroundColor: '#fafafa',
-          border: '1px solid #e0e0e0',
-          borderRadius: '8px',
         }}
         onClick={() => onSelect(null)}
         onMouseMove={handleMouseMove}

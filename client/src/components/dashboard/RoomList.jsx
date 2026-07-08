@@ -8,9 +8,9 @@ export default function RoomList({ rooms, selectedId, onSelect }) {
   const sorted = [...rooms].sort((a, b) => (b.occupancyPercent ?? 0) - (a.occupancyPercent ?? 0));
 
   return (
-    <div className="card bg-base-100 p-4 h-full flex flex-col min-h-0">
-      <div className="font-bold mb-3 flex-shrink-0">Dle obsazenosti</div>
-      <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2">
+    <div className="card bg-base-100 p-3 lg:p-4 flex flex-col lg:h-full lg:min-h-0">
+      <div className="mb-3 flex-shrink-0 font-bold">Dle obsazenosti</div>
+      <div className="flex max-h-80 flex-col gap-2 overflow-y-auto lg:max-h-none lg:min-h-0 lg:flex-1">
         {sorted.map((room) => (
           <div
             key={room.id}

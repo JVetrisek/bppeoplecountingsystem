@@ -25,27 +25,27 @@ export default function RoomDetail({ room, sensors, onClose, onChange, onDelete 
   if (!room) return null;
 
   return (
-    <div className="card bg-base-100 p-4 h-full flex flex-col gap-4 min-h-0 overflow-y-auto">
-      <div className="flex justify-between items-center">
-        <h2 className="font-bold text-lg">Detail místnosti</h2>
+    <div className="card bg-base-100 p-3 lg:p-4 flex flex-col gap-4 lg:h-full lg:min-h-0 lg:overflow-y-auto">
+      <div className="flex items-center justify-between">
+        <h2 className="font-bold text-base lg:text-lg">Detail místnosti</h2>
         <button className="btn btn-sm btn-ghost btn-square" onClick={onClose} aria-label="Zavřít">
           <Icon name="x-circle" className="size-5" />
         </button>
       </div>
 
-      <div className="form-control flex flex-col">
+      <div className="form-control flex w-full flex-col">
         <label className="label"><span className="label-text">Název</span></label>
         <input
-          className="input input-bordered input-sm"
+          className="input input-bordered input-sm w-full"
           value={draft.name}
           onChange={(e) => handleChange('name', e.target.value)}
         />
       </div>
 
-      <div className="form-control flex flex-col">
+      <div className="form-control flex w-full flex-col">
         <label className="label"><span className="label-text">Kapacita</span></label>
         <input
-          className="input input-bordered input-sm"
+          className="input input-bordered input-sm w-full"
           type="number"
           min={1}
           value={draft.capacity}
@@ -53,10 +53,10 @@ export default function RoomDetail({ room, sensors, onClose, onChange, onDelete 
         />
       </div>
 
-      <div className="form-control flex flex-col">
+      <div className="form-control flex w-full flex-col">
         <label className="label"><span className="label-text">Senzor</span></label>
         <select
-            className="select select-bordered select-sm"
+            className="select select-bordered select-sm w-full"
             value={draft.sensorId}
             onChange={(e) => handleChange('sensorId', e.target.value)}
             >
@@ -79,7 +79,7 @@ export default function RoomDetail({ room, sensors, onClose, onChange, onDelete 
         </select>
       </div>
 
-      <div className="form-control flex flex-col">
+      <div className="form-control flex w-full flex-col">
         <label className="label"><span className="label-text">Rozměry</span></label>
         <div className="flex gap-2">
             <input

@@ -89,8 +89,8 @@ export default function Dashboard() {
   const activeSensors = rooms.filter((r) => r.sensor).length;
 
   return (
-    <div className="flex gap-4 h-full">
-      <div className="flex-1 flex flex-col gap-4 min-w-0 min-h-0 overflow-hidden">
+    <div className="flex flex-col gap-4 lg:h-full lg:flex-row">
+      <div className="flex min-w-0 flex-col gap-4 lg:min-h-0 lg:flex-1 lg:overflow-hidden">
         <StatsBar
           totalOccupancy={totalOccupancy}
           totalCapacity={totalCapacity}
@@ -106,7 +106,7 @@ export default function Dashboard() {
         />
       </div>
 
-      <div className="w-80 flex flex-col gap-4 min-h-0 h-full overflow-hidden">
+      <div className="flex w-full flex-col gap-4 lg:h-full lg:w-80 lg:min-h-0 lg:overflow-hidden">
         <OccupancyChart
           data={chartData}
           room={selectedRoom}
@@ -119,7 +119,7 @@ export default function Dashboard() {
           from={rangeConfig.from.getTime()}
           to={rangeConfig.to.getTime()}
         />
-        <div className="flex-1 min-h-0">
+        <div className="lg:min-h-0 lg:flex-1">
           <RoomList
             rooms={rooms}
             selectedId={selectedId}

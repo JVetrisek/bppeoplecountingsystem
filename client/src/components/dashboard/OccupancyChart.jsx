@@ -99,10 +99,10 @@ export default function OccupancyChart({
   const ticks = Array.from({ length: tickCount + 1 }, (_, i) => from + i * step);
 
   return (
-    <div className="card bg-base-100 p-4">
-      <div className="flex justify-between items-start mb-4">
-        <div>
-          <div className="font-bold text-lg">{title}</div>
+    <div className="card bg-base-100 p-3 lg:p-4">
+      <div className="mb-4 flex items-start justify-between">
+        <div className="min-w-0">
+          <div className="truncate font-bold text-base lg:text-lg">{title}</div>
           {subtitle && <div className="text-sm text-base-content/50">{subtitle}</div>}
         </div>
         {room && (

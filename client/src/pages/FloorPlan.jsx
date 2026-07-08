@@ -100,14 +100,13 @@ export default function FloorPlan() {
   };
 
   return (
-    <div className="flex gap-4 h-full">
-      {/* Canvas */}
-      <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
-        <div className="card bg-base-100 p-4 flex-1 min-h-0 flex flex-col">
-          <div className="flex justify-between items-center mb-3">
-            <div className="font-bold text-lg">Plánek prostoru</div>
+    <div className="flex flex-col gap-4 lg:h-full lg:flex-row">
+      <div className="flex min-w-0 flex-col lg:min-h-0 lg:flex-1 lg:overflow-hidden">
+        <div className="card bg-base-100 p-3 lg:p-4 flex min-h-[300px] flex-col lg:min-h-0 lg:flex-1">
+          <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="font-bold text-base lg:text-lg">Plánek prostoru</div>
             <button
-              className="btn btn-success gap-2"
+              className="btn btn-success btn-sm gap-2 lg:btn-md"
               onClick={() => setAddModalOpen(true)}
             >
               <Icon name="plus-circle" className="size-5" />
@@ -123,8 +122,7 @@ export default function FloorPlan() {
         </div>
       </div>
 
-      {/* Pravý panel */}
-      <div className="w-80 flex flex-col min-h-0 h-full overflow-hidden">
+      <div className="flex w-full flex-col lg:h-full lg:w-80 lg:min-h-0 lg:overflow-hidden">
         {selectedRoom ? (
           <RoomDetail
             key={selectedRoom.id}
@@ -135,12 +133,12 @@ export default function FloorPlan() {
             onDelete={(id) => setDeletingRoom(rooms.find((r) => r.id === id))}
           />
         ) : (
-          <div className="card bg-base-100 p-4 h-full flex flex-col min-h-0">
-            <div className="flex justify-between items-center mb-2 flex-shrink-0">
-              <h2 className="font-bold text-lg">Místnosti</h2>
+          <div className="card bg-base-100 p-3 lg:p-4 flex flex-col lg:h-full lg:min-h-0">
+            <div className="mb-2 flex flex-shrink-0 items-center justify-between">
+              <h2 className="font-bold text-base lg:text-lg">Místnosti</h2>
               <span className="text-sm text-base-content/50">{rooms.length} celkem</span>
             </div>
-            <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-2">
+            <div className="flex max-h-80 flex-col gap-2 overflow-y-auto lg:max-h-none lg:min-h-0 lg:flex-1">
             {rooms.map(room => (
               <div
                 key={room.id}
