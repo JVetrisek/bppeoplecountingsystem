@@ -86,9 +86,9 @@ function formatTooltipLabel(timestamp, hours) {
 
 function StatCard({ label, value }) {
   return (
-    <div className="card bg-base-200 p-3">
-      <div className="text-xs text-base-content/50">{label}</div>
-      <div className="text-2xl font-bold mt-1">{value ?? '—'}</div>
+    <div className="card bg-base-200 p-2 lg:p-3">
+      <div className="text-[10px] lg:text-xs text-base-content/50">{label}</div>
+      <div className="text-xl lg:text-2xl font-bold mt-1">{value ?? '—'}</div>
     </div>
   );
 }
@@ -174,93 +174,114 @@ export default function ChartModal({
   if (!open) return null;
 
   return (
-    <div className="modal modal-middle modal-open">
-      <div className="modal-box w-11/12 max-w-6xl p-0 overflow-hidden flex flex-col">
-        <div className="grid grid-cols-[auto_1fr_auto] items-end gap-4 px-4 py-3 border-b border-base-300 flex-shrink-0">
-          <div className="font-bold text-lg flex-shrink-0">{title}</div>
-
-          <div className="flex flex-wrap items-end justify-center gap-2 min-w-0">
-            <label className="flex flex-col gap-0.5">
-              <span className="text-[10px] text-base-content/50">Místnost</span>
-              <select
-                className="select select-bordered select-xs h-6 min-h-6 w-[9rem] truncate"
-                value={selectedRoomId ?? ''}
-                onChange={(e) => setSelectedRoomId(e.target.value || null)}
+    <div className="modal modal-bottom lg:modal-middle modal-open">
+      <div className="modal-box flex h-[92dvh] max-h-[92dvh] w-full max-w-full flex-col overflow-hidden rounded-t-2xl p-0 lg:h-auto lg:max-h-[90vh] lg:w-11/12 lg:max-w-6xl lg:rounded-box">
+        <div className="flex-shrink-0 border-b border-base-300 px-3 py-3 lg:px-4">
+          <div className="flex flex-col gap-3 lg:grid lg:grid-cols-[auto_1fr_auto] lg:items-end lg:gap-4">
+            <div className="flex items-center justify-between gap-2 lg:block">
+              <div className="min-w-0 truncate font-bold text-base lg:text-lg">{title}</div>
+              <button
+                type="button"
+                className="btn btn-sm btn-ghost btn-square flex-shrink-0 lg:hidden"
+                onClick={onClose}
+                aria-label="Zavřít"
               >
-                <option value="">Celé podlaží</option>
-                {rooms.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="flex flex-col gap-0.5 ml-2">
-              <span className="text-[10px] text-base-content/50">Období</span>
-              <div className="flex items-center gap-1">
-                {PRESET_RANGES.map((r) => (
-                  <button
-                    key={r}
-                    type="button"
-                    className={`btn btn-xs h-6 min-h-6 ${!isCustom && range === r ? 'btn-primary' : 'btn-ghost'}`}
-                    onClick={() => handlePresetChange(r)}
-                  >
-                    {RANGE_LABELS[r]}
-                  </button>
-                ))}
-              </div>
-            </label>
-
-            <div className="flex items-end gap-2 ml-2 flex-nowrap">
-              <label className="flex flex-col gap-0.5">
-                <span className="text-[10px] text-base-content/50">Datum od</span>
-                <CallyDatePicker
-                  value={draftFromDate}
-                  onChange={setDraftFromDate}
-                  className="input input-bordered input-xs h-6 min-h-6 px-2 text-left w-[5.75rem]"
-                />
-              </label>
-              <label className="flex flex-col gap-0.5">
-                <span className="text-[10px] text-base-content/50">Čas od</span>
-                <TimePicker
-                  value={draftFromTime}
-                  onChange={setDraftFromTime}
-                  className="input input-bordered input-xs h-6 min-h-6 px-2 text-left"
-                />
-              </label>
-              <label className="flex flex-col gap-0.5">
-                <span className="text-[10px] text-base-content/50">Datum do</span>
-                <CallyDatePicker
-                  value={draftToDate}
-                  onChange={setDraftToDate}
-                  className="input input-bordered input-xs h-6 min-h-6 px-2 text-left w-[5.75rem]"
-                />
-              </label>
-              <label className="flex flex-col gap-0.5">
-                <span className="text-[10px] text-base-content/50">Čas do</span>
-                <TimePicker
-                  value={draftToTime}
-                  onChange={setDraftToTime}
-                  className="input input-bordered input-xs h-6 min-h-6 px-2 text-left"
-                />
-              </label>
-              <button type="button" className="btn btn-xs btn-primary h-6 min-h-6" onClick={handleApplyCustom}>
-                Použít
+                <Icon name="x-circle" className="size-5" />
               </button>
             </div>
-          </div>
 
-          <button type="button" className="btn btn-sm btn-ghost btn-square flex-shrink-0 justify-self-end" onClick={onClose} aria-label="Zavřít">
-            <Icon name="x-circle" className="size-5" />
-          </button>
+            <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-end lg:justify-center lg:gap-2">
+              <label className="flex w-full flex-col gap-0.5 lg:w-auto">
+                <span className="text-[10px] text-base-content/50">Místnost</span>
+                <select
+                  className="select select-bordered select-xs h-8 min-h-8 w-full truncate lg:h-6 lg:min-h-6 lg:w-[9rem]"
+                  value={selectedRoomId ?? ''}
+                  onChange={(e) => setSelectedRoomId(e.target.value || null)}
+                >
+                  <option value="">Celé podlaží</option>
+                  {rooms.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="flex w-full flex-col gap-0.5 lg:w-auto lg:ml-2">
+                <span className="text-[10px] text-base-content/50">Období</span>
+                <div className="flex flex-wrap items-center gap-1">
+                  {PRESET_RANGES.map((r) => (
+                    <button
+                      key={r}
+                      type="button"
+                      className={`btn btn-xs h-7 min-h-7 lg:h-6 lg:min-h-6 ${!isCustom && range === r ? 'btn-primary' : 'btn-ghost'}`}
+                      onClick={() => handlePresetChange(r)}
+                    >
+                      {RANGE_LABELS[r]}
+                    </button>
+                  ))}
+                </div>
+              </label>
+
+              <div className="grid w-full grid-cols-2 gap-2 lg:flex lg:w-auto lg:flex-nowrap lg:items-end lg:ml-2">
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[10px] text-base-content/50">Datum od</span>
+                  <CallyDatePicker
+                    value={draftFromDate}
+                    onChange={setDraftFromDate}
+                    className="input input-bordered input-xs h-8 min-h-8 w-full px-2 text-left lg:h-6 lg:min-h-6 lg:w-[5.75rem]"
+                  />
+                </label>
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[10px] text-base-content/50">Čas od</span>
+                  <TimePicker
+                    value={draftFromTime}
+                    onChange={setDraftFromTime}
+                    className="input input-bordered input-xs h-8 min-h-8 w-full px-2 text-left lg:h-6 lg:min-h-6"
+                  />
+                </label>
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[10px] text-base-content/50">Datum do</span>
+                  <CallyDatePicker
+                    value={draftToDate}
+                    onChange={setDraftToDate}
+                    className="input input-bordered input-xs h-8 min-h-8 w-full px-2 text-left lg:h-6 lg:min-h-6 lg:w-[5.75rem]"
+                  />
+                </label>
+                <label className="flex flex-col gap-0.5">
+                  <span className="text-[10px] text-base-content/50">Čas do</span>
+                  <TimePicker
+                    value={draftToTime}
+                    onChange={setDraftToTime}
+                    className="input input-bordered input-xs h-8 min-h-8 w-full px-2 text-left lg:h-6 lg:min-h-6"
+                  />
+                </label>
+                <button
+                  type="button"
+                  className="btn btn-xs btn-primary col-span-2 h-8 min-h-8 lg:col-span-1 lg:h-6 lg:min-h-6"
+                  onClick={handleApplyCustom}
+                >
+                  Použít
+                </button>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              className="btn btn-sm btn-ghost btn-square hidden flex-shrink-0 justify-self-end lg:inline-flex"
+              onClick={onClose}
+              aria-label="Zavřít"
+            >
+              <Icon name="x-circle" className="size-5" />
+            </button>
+          </div>
         </div>
 
-        <div className="p-4 flex flex-col gap-3 flex-1 overflow-y-auto min-h-0">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3 lg:p-4">
           {!selectedRoom && (
-            <div className="text-sm text-base-content/50 flex-shrink-0">{roomCount ?? 0} sledovaných místností</div>
+            <div className="flex-shrink-0 text-sm text-base-content/50">{roomCount ?? 0} sledovaných místností</div>
           )}
-          <div className="relative h-[300px] flex-shrink-0">
+          <div className="relative h-[220px] flex-shrink-0 sm:h-[260px] lg:h-[300px]">
           <div className="absolute -top-1 left-2 z-5">
             <ChartAggregationHelp
               isRoom={isRoom}
@@ -270,10 +291,7 @@ export default function ChartModal({
             />
           </div>
           {!hasData ? (
-            <div
-              className="flex items-center justify-center text-sm text-base-content/50 border border-dashed border-base-300 rounded-lg"
-              style={{ height: 300 }}
-            >
+            <div className="flex h-full items-center justify-center rounded-lg border border-dashed border-base-300 text-sm text-base-content/50">
               Žádná dostupná data
             </div>
           ) : (
@@ -323,7 +341,7 @@ export default function ChartModal({
           )}
           </div>
 
-          <div className="grid grid-cols-3 gap-3 flex-shrink-0">
+          <div className="grid flex-shrink-0 grid-cols-1 gap-2 sm:grid-cols-3 sm:gap-3">
             <StatCard label="Průměrná obsazenost" value={stats.avg} />
             <StatCard label="Maximální obsazenost" value={stats.max} />
             <StatCard label="Minimální obsazenost" value={stats.min} />

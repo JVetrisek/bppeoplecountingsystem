@@ -10,22 +10,22 @@ function getAggregationHelpText({ isRoom, range, interval }) {
 
   if (mode === 'live') {
     if (isRoom) {
-      return 'Graf zobrazuje odečty za poslední hodinu v 5minutových blocích — v každém bloku poslední hodnota senzoru místnosti.';
+      return 'Poslední hodina po 5min blocích. Poslední hodnota senzoru v každém bloku.';
     }
-    return 'Graf zobrazuje odečty za poslední hodinu v 5minutových blocích. V každém bloku se sečtou senzory, které v tom intervalu reportovaly. Poslední bod používá stejnou logiku jako karta „Osob v budově“ — součet nejnovějších odečtů z posledních 10 minut (senzor bez čerstvých dat = 0).';
+    return 'Poslední hodina po 5min blocích. Součet senzorů, které v bloku reportovaly. Poslední bod je aktuální součet z odečtů do 10 minut.';
   }
 
   if (mode === 'hour') {
     if (isRoom) {
-      return 'Zobrazujeme průměrnou obsazenost místnosti v jednotlivých hodinách.';
+      return 'Zprůměrovaná obsazenost místnosti po hodinách.';
     }
-    return 'Zobrazujeme průměrnou obsazenost všech místností dohromady v jednotlivých hodinách.';
+    return 'Zprůměrovaný součet obsazenosti všech místností po hodinách.';
   }
 
   if (isRoom) {
-    return 'Zobrazujeme průměrnou obsazenost místnosti v jednotlivých dnech.';
+    return 'Zprůměrovaná obsazenost místnosti po dnech.';
   }
-  return 'Zobrazujeme průměrnou obsazenost všech místností dohromady v jednotlivých dnech.';
+  return 'Zprůměrovaný součet obsazenosti všech místností po dnech.';
 }
 
 export default function ChartAggregationHelp({ isRoom, range, interval, iconClassName = 'size-5' }) {
