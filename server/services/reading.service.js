@@ -6,7 +6,7 @@ const { badRequest } = require("./error.service");
 const BUCKET_MS = 5 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 const DAY_MS = 24 * HOUR_MS;
-const FRESH_READING_MS = 10 * 60 * 1000; // 2× interval senzoru; starší odečet = senzor offline
+const FRESH_READING_MS = 10 * 60 * 1000;
 
 function parseDateParam(value) {
   const date = new Date(value);
@@ -64,17 +64,7 @@ function rowsToSlotMap(rows) {
   return valueBySlot;
 }
 
-/**
- * Aktuální obsazenost po senzorech — jediný zdroj pravdy pro souhrny a poslední bod live grafu patra.
- *
- * Pipeline v grafu ptá: „kdo poslal uplink v tomto konkrétním 5min slotu?“
- * Tato funkce ptá: „jaká je nejnovější hodnota senzoru za posledních FRESH_READING_MS?“
- * To jsou dvě různé otázky — senzor může mít čerstvý odečet z předchozího slotu a pipeline
- * by ho v posledním bucketu nezapočítala, ale tady ano.
- *
- * Senzor bez čerstvého odečtu v mapě chybí → volající ho bere jako 0.
- * Použití: karta „Osob v budově“, obsazenost místností (room.service), poslední bod live grafu patra.
- */
+
 async function getFreshOccupancyBySensor(sensorIds, asOf = new Date()) {
   if (!sensorIds.length) return new Map();
 
@@ -141,10 +131,6 @@ async function aggregateOccupancySeries({ roomId, sensorIds, fromDate, toDate, i
   const rows = await Reading.aggregate(pipeline);
   const valueBySlot = rowsToSlotMap(rows);
 
-  // Live graf patra: pipeline pro každý slot sčítá jen senzory s uplinkem uvnitř daného 5min okna.
-  // U posledního slotu by tak chyběli senzoři s čerstvým odečtem z předchozího bucketu.
-  // Výsledek pipeline proto přepíšeme součtem z getFreshOccupancyBySensor (stejný jako „Osob v budově“).
-  // Starší sloty zůstávají z pipeline — ukazují historický průběh podle skutečných reportů v intervalu.
   if (isFloor && interval === "minute") {
     const slots = generateSlots(fromDate, toDate, "minute");
     if (slots.length) {
